@@ -3,7 +3,7 @@ const NAV_STORE = [['dashboard', 'Dashboard'], ['audit', 'Start / Continue Audit
 const NAV_STAFF = [['dashboard', 'Dashboard'], ['cycles', 'Audit Cycles'], ['stores', 'Stores'], ['users', 'Users'],
                    ['basestock', 'Base Stock'], ['reports', 'Reports'], ['logs', 'Audit Logs'], ['profile', 'My Account']];
 const NAV = { STORE_USER: NAV_STORE, ADMIN: NAV_STAFF, CIRCLE_HEAD: NAV_STAFF };   // UI only: RLS is the real guard
-const LATER = { cycles: 'Phase 2b', stores: 'Phase 2b', users: 'Phase 2b', basestock: 'Phase 2b', audit: 'Phase 3', result: 'Phase 4', reports: 'Phase 6', logs: 'Phase 6' };
+const LATER = { audit: 'Phase 3', result: 'Phase 4', reports: 'Phase 6', logs: 'Phase 6' };
 const ROLE_LABEL = { ADMIN: 'Administrator', CIRCLE_HEAD: 'Circle Head', STORE_USER: 'Store User' };
 
 const S = { session: null, profile: null, store: null, circles: [], recovery: false };
@@ -86,7 +86,7 @@ function holdView(rejected) {
 
 function shell(page) {
   const p = S.profile, items = NAV[p.role] || NAV_STORE;
-  const cur = items.some(i => i[0] === page) ? page : 'dashboard';
+  const cur = items.some(i => i[0] === page) ? page : 'dashboard'; S.cur = cur;
   const chip = p.role === 'STORE_USER' && S.store ? `${esc(S.store.name)} · ${esc(S.store.circles?.code || '')}`
     : p.role === 'CIRCLE_HEAD' ? esc(S.circles.map(c => c.code).join(', ') || 'No circles assigned') : 'All circles';
   const title = items.find(i => i[0] === cur)[1];
@@ -98,6 +98,7 @@ function shell(page) {
 
 function pageBody(page) {
   const p = S.profile;
+  if (PAGES[page]) return '<div id="pg"><div class="boot">Loading…</div></div>';
   if (page === 'dashboard') return `<div class="card"><h2>Welcome, ${esc(p.full_name)}</h2>
     <p class="muted">${p.role === 'STORE_USER' ? (S.store ? `Store: <b>${esc(S.store.name)}</b> (${esc(S.store.code)}), circle ${esc(S.store.circles?.code || '')}.` : 'No store is assigned to your account yet. Please contact your administrator.')
       : `You are signed in as ${ROLE_LABEL[p.role]}.`}</p><p class="muted">Dashboards and audit tools are added in the next phases.</p></div>`;
@@ -111,7 +112,7 @@ function pageBody(page) {
 
 /* ---------- router & wiring ---------- */
 async function route() {
-  const h = (location.hash || '').replace(/^#\//, '');
+  const h = (location.hash || '').replace(/^#\//, '').split('?')[0];
   let html, wire = () => {};
   if (S.recovery) { html = resetView(); wire = wireReset; }
   else if (!S.session) {
@@ -165,6 +166,8 @@ function wireSignup() {
   });
 }
 function wireShell() {
+  const pg = document.getElementById('pg');
+  if (pg && PAGES[S.cur]) PAGES[S.cur](pg).catch(e => { console.error(e); pg.innerHTML = '<div class="alert err">Could not load this page. ' + esc(friendlyError(e)) + '</div>'; });
   const f = document.getElementById('pf');
   if (!f) return;
   f.onsubmit = e => {
@@ -177,4 +180,4 @@ function wireShell() {
   };
 }
 
-boot();
+window.addEventListener('load', boot);   // after ALL page scripts (admin.js, basestock.js) are loaded
