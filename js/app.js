@@ -3,7 +3,7 @@ const NAV_STORE = [['dashboard', 'Dashboard'], ['audit', 'Start / Continue Audit
 const NAV_STAFF = [['dashboard', 'Dashboard'], ['cycles', 'Audit Cycles'], ['stores', 'Stores'], ['users', 'Users'],
                    ['basestock', 'Base Stock'], ['reports', 'Reports'], ['logs', 'Audit Logs'], ['profile', 'My Account']];
 const NAV = { STORE_USER: NAV_STORE, ADMIN: NAV_STAFF, CIRCLE_HEAD: NAV_STAFF };   // UI only: RLS is the real guard
-const LATER = { reports: 'Phase 6', logs: 'Phase 6' };
+const LATER = {};
 const ROLE_LABEL = { ADMIN: 'Administrator', CIRCLE_HEAD: 'Circle Head', STORE_USER: 'Store User' };
 
 const S = { session: null, profile: null, store: null, circles: [], recovery: false };

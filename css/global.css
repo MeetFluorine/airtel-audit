@@ -104,3 +104,7 @@ h3{font-size:15px;margin:20px 0 8px}
 .kv.integ{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}.kv.integ b{font-size:18px}
 .acts{max-height:320px;overflow:auto}.act{display:grid;grid-template-columns:130px 1fr;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px solid #F3F4F6}
 @media(max-width:700px){.act{grid-template-columns:1fr}}
+/* ---- Phase 6: reports ---- */
+.reptiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-bottom:12px}
+.rtile{text-align:left;background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:12px;cursor:pointer;font:inherit;display:flex;flex-direction:column;gap:4px}
+.rtile span{font-size:12px;color:#6B7280}.rtile.on{border-color:#E40000;background:#FEF2F2}
