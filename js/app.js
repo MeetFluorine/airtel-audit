@@ -3,7 +3,7 @@ const NAV_STORE = [['dashboard', 'Dashboard'], ['audit', 'Start / Continue Audit
 const NAV_STAFF = [['dashboard', 'Dashboard'], ['cycles', 'Audit Cycles'], ['stores', 'Stores'], ['users', 'Users'],
                    ['basestock', 'Base Stock'], ['reports', 'Reports'], ['logs', 'Audit Logs'], ['profile', 'My Account']];
 const NAV = { STORE_USER: NAV_STORE, ADMIN: NAV_STAFF, CIRCLE_HEAD: NAV_STAFF };   // UI only: RLS is the real guard
-const LATER = { audit: 'Phase 3', result: 'Phase 4', reports: 'Phase 6', logs: 'Phase 6' };
+const LATER = { reports: 'Phase 6', logs: 'Phase 6' };
 const ROLE_LABEL = { ADMIN: 'Administrator', CIRCLE_HEAD: 'Circle Head', STORE_USER: 'Store User' };
 
 const S = { session: null, profile: null, store: null, circles: [], recovery: false };
@@ -86,10 +86,10 @@ function holdView(rejected) {
 
 function shell(page) {
   const p = S.profile, items = NAV[p.role] || NAV_STORE;
-  const cur = items.some(i => i[0] === page) ? page : 'dashboard'; S.cur = cur;
+  const cur = (items.some(i => i[0] === page) || page === 'result') ? page : 'dashboard'; S.cur = cur;
   const chip = p.role === 'STORE_USER' && S.store ? `${esc(S.store.name)} · ${esc(S.store.circles?.code || '')}`
     : p.role === 'CIRCLE_HEAD' ? esc(S.circles.map(c => c.code).join(', ') || 'No circles assigned') : 'All circles';
-  const title = items.find(i => i[0] === cur)[1];
+  const title = (items.find(i => i[0] === cur) || ['result', 'Audit Result'])[1];
   return `<div class="shell"><aside class="side">${brand()}<nav>${items.map(([k, l]) => `<a href="#/${k}" class="${k === cur ? 'on' : ''}">${l}</a>`).join('')}</nav></aside>
     <div class="main"><header class="top"><h1>${title}</h1><div class="who"><span class="chip">${chip}</span>
       <span class="uname">${esc(p.full_name)}<small>${ROLE_LABEL[p.role]}</small></span><button class="btn sm" id="out">Log out</button></div></header>

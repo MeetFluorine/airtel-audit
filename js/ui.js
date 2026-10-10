@@ -33,6 +33,7 @@ const isAdmin = () => S.profile.role === 'ADMIN';
 const badge = (t, c = '') => `<span class="bd ${c}">${esc(t)}</span>`;
 const fdate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 // Our own server messages (raise exception ...) are safe to show; everything else is mapped.
+const fdt = d => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const rpcMsg = e => (e && ['42501', 'P0001', 'P0002'].includes(e.code) && e.message) ? e.message : friendlyError(e);
 
 async function getStores() {

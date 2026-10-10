@@ -129,21 +129,34 @@ PAGES.cycles = async el => {
           <td class="nw"><button class="btn sm" data-act="open" data-id="${c.id}">Open</button>${isAdmin() ? ` <button class="btn sm danger-o" data-act="del" data-id="${c.id}" data-name="${esc(c.name)}">Delete</button>` : ''}</td></tr>`; }).join(''));
   }
   async function detail(id) {
-    const [c, a] = await Promise.all([sb.from('audit_cycles').select('id,name,status').eq('id', id).single(), sb.from('audit_cycle_stores').select('store_id,active_upload_id,frozen_at').eq('audit_cycle_id', id)]);
-    if (c.error) throw c.error; if (a.error) throw a.error;
+    const [c, a, ss] = await Promise.all([sb.from('audit_cycles').select('id,name,status').eq('id', id).single(), sb.from('audit_cycle_stores').select('store_id,active_upload_id,frozen_at').eq('audit_cycle_id', id),
+      sb.from('audit_sessions').select('id,store_id,version,status,submitted_at,reopened_at,reopen_reason').eq('audit_cycle_id', id).order('version')]);
+    if (c.error) throw c.error; if (a.error) throw a.error; if (ss.error) throw ss.error;
     const cy = c.data, fz = Object.fromEntries(a.data.filter(x => x.active_upload_id).map(x => [x.store_id, x]));
+    const by = {}; ss.data.forEach(x => (by[x.store_id] = by[x.store_id] || []).push(x));
+    const latest = sid => (by[sid] || []).slice(-1)[0] || null;
     el.innerHTML = `<div class="bar"><button class="btn sm" data-act="back">← All cycles</button><div>${stBadge(cy.status)} <b>${esc(cy.name)}</b> <span class="muted">${Object.keys(fz).length} / ${stores.length} stores frozen</span></div></div>
       ${isAdmin() ? `<div class="card sec"><div class="row"><div><label>Status</label><select id="st">${['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED'].map(s => `<option ${s === cy.status ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
         <button class="btn sm" data-act="setst">Update status</button><button class="btn sm danger-o" data-act="delc">Delete cycle</button></div>
         <p class="muted">Store users see a cycle once it is ACTIVE and their store's base stock is frozen.</p></div>` : ''}` +
-      tbl(['Store', 'Circle', 'Base stock', ''], stores.map(s => `<tr><td><b>${esc(s.name)}</b> <span class="muted">${esc(s.code)}</span></td><td>${esc(s.circles?.code || '')}</td>
-        <td>${fz[s.id] ? badge('✓ Frozen', 'ok') + ' <span class="muted">' + fdate(fz[s.id].frozen_at) + '</span>' : badge('Not uploaded', 'warn')}</td>
-        <td><a class="btn sm" href="#/basestock?c=${cy.id}&s=${s.id}">${fz[s.id] ? 'Revise base' : 'Upload base'}</a></td></tr>`).join(''));
+      tbl(['Store', 'Circle', 'Base stock', 'Audit', ''], stores.map(s => { const L = latest(s.id);
+        const au = !L ? badge('Not started') : L.status === 'IN_PROGRESS' ? badge('In progress · v' + L.version, 'info') : badge('Locked · v' + L.version + ' · ' + fdate(L.submitted_at), 'ok');
+        return `<tr><td><b>${esc(s.name)}</b> <span class="muted">${esc(s.code)}</span></td><td>${esc(s.circles?.code || '')}</td>
+          <td>${fz[s.id] ? badge('✓ Frozen', 'ok') + ' <span class="muted">' + fdate(fz[s.id].frozen_at) + '</span>' : badge('Not uploaded', 'warn')}</td><td>${au}</td>
+          <td class="nw"><a class="btn sm" href="#/basestock?c=${cy.id}&s=${s.id}">${fz[s.id] ? 'Revise base' : 'Upload base'}</a>
+            ${L && L.status === 'LOCKED' ? ` <a class="btn sm" href="#/result?sess=${L.id}">View result</a> <button class="btn sm danger-o" data-act="reopen" data-id="${L.id}" data-n="${esc(s.name)}">Reopen</button>` : ''}
+            ${by[s.id] ? ` <button class="btn sm" data-act="hist" data-s="${s.id}" data-n="${esc(s.name)}">History</button>` : ''}</td></tr>`; }).join(''));
     el.onclick = async e => {
       const b = e.target.closest('[data-act]'); if (!b) return;
       if (b.dataset.act === 'back') return list();
       if (b.dataset.act === 'delc') return askDelete(id, cy.name, list);
       if (b.dataset.act === 'setst') { const { error } = await sb.from('audit_cycles').update({ status: el.querySelector('#st').value }).eq('id', id); if (error) return toast(rpcMsg(error), 'err'); toast('Status updated.', 'ok'); detail(id); }
+      if (b.dataset.act === 'reopen') openModal('Reopen audit for ' + b.dataset.n + '?', `<p>The store will be able to add or remove items again. The current result is kept as history and a new version is started with the existing counts.</p>
+        <label>Reason (required)</label><textarea id="m_reason" rows="3" placeholder="e.g. 3 cartons found after initial submission."></textarea>`, [cancelBtn,
+        { label: 'REOPEN AUDIT', cls: 'danger', fn: async () => { const r = document.getElementById('m_reason').value.trim(); if (r.length < 5) { toast('Please enter a reason (at least 5 characters).', 'err'); return false; }
+          const { error } = await sb.rpc('reopen_audit', { p_session: b.dataset.id, p_reason: r }); if (error) throw error; toast('Audit reopened as a new version.', 'ok'); detail(id); } }]);
+      if (b.dataset.act === 'hist') openModal('Audit history · ' + b.dataset.n, (by[b.dataset.s] || []).map(v => `<div class="hist"><b>Version ${v.version}</b>
+        ${v.reopened_at ? `<br>Reopened: ${fdt(v.reopened_at)}<br>Reason: “${esc(v.reopen_reason)}”` : ''}<br>${v.submitted_at ? 'Submitted: ' + fdt(v.submitted_at) : 'In progress (not yet submitted)'}</div>`).join(''), [{ label: 'Close' }]);
     };
   }
   function listClick(e) {
