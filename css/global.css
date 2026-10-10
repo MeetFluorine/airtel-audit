@@ -90,3 +90,7 @@ details{margin:10px 0}summary{cursor:pointer;font-weight:600;color:#B91C1C;margi
 .kv .a{background:#FFFBEB;border-color:#FDE68A}.kv .a b{color:#B45309}
 .pos{color:#B45309;font-weight:700}.neg{color:#B91C1C;font-weight:700}
 .hist{padding:8px 0;border-bottom:1px solid #F3F4F6;font-size:13px}
+/* ---- type-ahead list ---- */
+.opt mark{background:#FEE2E2;color:#B91C1C;padding:0 1px;border-radius:2px}
+.opt.sel{border-color:#E40000;background:#FEF2F2}
+#opts{max-height:300px;overflow:auto}

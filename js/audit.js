@@ -79,7 +79,7 @@ function scanner(el, c) {
       <div id="res" class="resp idle">Ready to scan</div>
       <div id="unl" class="resp err" hidden><div class="rt">Serial not found in your store base stock</div><div class="muted" id="unl-s"></div>
         <label for="uc">Please enter Item Code</label><input id="uc" autocomplete="off" placeholder="Item Code"><div class="ma"><button class="btn" id="unl-skip">Skip</button><button class="btn primary" id="unl-add">Add as Physical Stock</button></div></div></div>
-    <div id="p-non" class="card" hidden><label for="ic">Item Code</label><div class="row"><div><input id="ic" autocomplete="off" autocapitalize="characters" placeholder="Enter or scan item code"></div><button class="btn" id="look">Look up</button></div>
+    <div id="p-non" class="card" hidden><label for="ic">Item Code</label><input id="ic" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Start typing the item code, then pick from the list">
       <div id="opts"></div><label for="qty">Physical quantity</label><div class="qty"><button class="btn" id="qm">−</button><input id="qty" type="number" min="0" step="any" value="1" inputmode="decimal"><button class="btn" id="qp">+</button></div>
       <button class="btn primary" id="addn" disabled>Add to audit</button><div id="nres" class="resp idle">Counts are blind: the system quantity is never shown.</div></div></div>
     <aside class="aud-side"><div class="card"><div class="bar"><b>Audit progress</b><span id="net"></span></div>
@@ -130,20 +130,29 @@ function scanner(el, c) {
   // tabs
   el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { el.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('on', x === b)); $('p-ser').hidden = b.dataset.t !== 'ser'; $('p-non').hidden = b.dataset.t !== 'non'; (b.dataset.t === 'ser' ? scan : $('ic')).focus(); });
   // non-serialized
-  const optLabel = o => `<b>${esc(o.item_code)}</b> ${esc([o.inventory_status, o.item_quality].filter(Boolean).join(' · '))}<br><span class="muted">${esc(o.item_description || '')} ${o.item_uom ? '(' + esc(o.item_uom) + ')' : ''}</span>`;
+  const hl = (txt, v) => { const i = String(txt).toUpperCase().indexOf(v); return i < 0 || !v ? esc(txt) : esc(txt.slice(0, i)) + '<mark>' + esc(txt.slice(i, i + v.length)) + '</mark>' + esc(txt.slice(i + v.length)); };
+  const optLabel = (o, v) => `<b>${hl(o.item_code, v)}</b> ${esc([o.inventory_status, o.item_quality].filter(Boolean).join(' · '))}<br><span class="muted">${esc(o.item_description || '')} ${o.item_uom ? '(' + esc(o.item_uom) + ')' : ''}</span>`;
+  let seq = 0, tmr = null;
+  const choose = o => { st.pick = o; $('addn').disabled = false; $('opts').querySelectorAll('.opt').forEach(l => l.classList.toggle('sel', st.opts[+l.dataset.i] === o)); };
   async function look() {
-    const code = $('ic').value.trim(); st.pick = null; $('addn').disabled = true; if (!code) return;
-    $('opts').innerHTML = '<div class="muted">Looking up…</div>';
+    const code = $('ic').value.trim(), v = code.toUpperCase(), my = ++seq; st.pick = null; st.opts = []; $('addn').disabled = true;
+    if (code.length < 2) { $('opts').innerHTML = code ? '<div class="muted">Keep typing…</div>' : ''; return; }
     const { data, error } = await sb.rpc('lookup_item', { p_session: sid, p_code: code });
+    if (my !== seq) return;                                   // a newer keystroke already replaced this search
     if (error) { $('opts').innerHTML = `<div class="alert err">${esc(isNet(error) ? 'Network connection interrupted. Try again when you are back online.' : rpcMsg(error))}</div>`; return; }
     if (data.serialized_only) { $('opts').innerHTML = '<div class="alert warn">This item is serialized. Please scan its serial numbers on the Serialized Scan tab.</div>'; return; }
-    if (!data.options.length) { st.opts = [{ item_code: code.toUpperCase(), inventory_status: '', item_quality: '' }]; $('opts').innerHTML = `<div class="alert warn">Not found in your store base stock. It will be recorded as excess.</div><label class="opt"><input type="radio" name="o" value="0" checked> ${optLabel(st.opts[0])}</label>`; st.pick = st.opts[0]; $('addn').disabled = false; return; }
-    st.opts = data.options;
-    $('opts').innerHTML = (data.exact ? '' : '<div class="muted">Did you mean:</div>') + data.options.map((o, i) => `<label class="opt"><input type="radio" name="o" value="${i}" ${data.exact && data.options.length === 1 ? 'checked' : ''}> ${optLabel(o)}</label>`).join('');
-    if (data.exact && data.options.length === 1) { st.pick = data.options[0]; $('addn').disabled = false; }
-    $('opts').querySelectorAll('input').forEach(r => r.onchange = () => { const o = st.opts[+r.value]; if (!data.exact) { $('ic').value = o.item_code; look(); } else { st.pick = o; $('addn').disabled = false; } });
+    if (!data.options.length) {
+      st.opts = [{ item_code: v, inventory_status: '', item_quality: '' }];
+      $('opts').innerHTML = `<div class="alert warn">No match in your store base stock. If you count it, it will be recorded as excess.</div><label class="opt" data-i="0"><input type="radio" name="o"> <b>${esc(v)}</b> <span class="muted">(not in base stock)</span></label>`;
+    } else {
+      st.opts = data.options;
+      $('opts').innerHTML = `<div class="muted">${data.options.length} matching item${data.options.length === 1 ? '' : 's'} - tap one:</div>` + data.options.map((o, i) => `<label class="opt" data-i="${i}"><input type="radio" name="o"> ${optLabel(o, v)}</label>`).join('');
+    }
+    $('opts').querySelectorAll('.opt').forEach(l => l.onclick = () => { choose(st.opts[+l.dataset.i]); $('qty').focus(); $('qty').select(); });
+    if (st.opts.length === 1 && data.options.length) choose(st.opts[0]);
   }
-  $('look').onclick = look; $('ic').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); look(); } };
+  $('ic').oninput = () => { clearTimeout(tmr); tmr = setTimeout(look, 200); };
+  $('ic').onkeydown = e => { if (e.key !== 'Enter') return; e.preventDefault(); clearTimeout(tmr); if (st.pick) { $('qty').focus(); $('qty').select(); } else look(); };
   $('qm').onclick = () => { $('qty').value = Math.max(0, Number($('qty').value || 0) - 1); }; $('qp').onclick = () => { $('qty').value = Number($('qty').value || 0) + 1; };
   $('addn').onclick = () => {
     const q = Number($('qty').value); if (!st.pick) return; if (!(q > 0)) return toast('Please enter a quantity greater than zero.', 'err');
