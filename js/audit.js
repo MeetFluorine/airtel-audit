@@ -221,6 +221,11 @@ PAGES.result = async el => {
     sid = c.session.id;
   }
   if (!sid) { el.innerHTML = '<div class="card"><h2>No audit selected</h2><p class="muted">Open a result from Audit Cycles.</p></div>'; return; }
+  return resultView(el, sid, false);
+};
+
+async function resultView(el, sid, embedded) {
+  const p = S.profile;
   const [si, sm] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid })]);
   if (si.error || !si.data) throw si.error || new Error('Result not found');
   if (sm.error) throw sm.error;
@@ -229,6 +234,7 @@ PAGES.result = async el => {
       <div class="row">${p.role !== 'STORE_USER' ? '<a class="btn sm" href="#/cycles">← Audit cycles</a>' : ''}${badge(ss.status === 'LOCKED' ? 'COMPLETED' : 'SUPERSEDED VERSION', ss.status === 'LOCKED' ? 'ok' : 'warn')}</div></div>
     ${kpis(m)}<div class="bar"><div class="tabs">${[['ALL', 'All', m.rows_all], ['MATCH', 'Matched', m.rows_match], ['SHORT', 'Short', m.rows_short], ['EXCESS', 'Excess', m.rows_excess]].map(t => `<button class="tab" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div>
       <input id="q" class="srch" placeholder="Search item code, description or serial…"></div><div id="rt"></div>`;
+  if (embedded) el.querySelector('.bar').remove();
   const mark = () => el.querySelectorAll('[data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab));
   async function load() {
     mark(); const rt = el.querySelector('#rt'); rt.innerHTML = '<div class="boot">Loading…</div>';
@@ -245,4 +251,4 @@ PAGES.result = async el => {
   el.onclick = e => { const t = e.target.closest('[data-ty]'); if (t) { tab = t.dataset.ty; page = 0; return load(); } const g = e.target.closest('[data-pg]'); if (g) { page += Number(g.dataset.pg); load(); } };
   el.querySelector('#q').oninput = e => { clearTimeout(timer); const v = e.target.value; timer = setTimeout(() => { q = v; page = 0; load(); }, 300); };
   await load();
-};
+}

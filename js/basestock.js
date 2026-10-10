@@ -95,6 +95,7 @@ if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
       if (!/\.(xlsx|xls)$/i.test(f.name)) throw new Error('Please upload an .xlsx or .xls file.');
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
       const res = bsValidate(bsPickRows(XLSX, wb));
+      if (res.missing.length || res.errors.length) sb.rpc('log_upload_event', { p_type: 'VALIDATION_FAILED', p_store: store.id, p_cycle: st.cycle, p_upload: null, p_meta: { file: f.name, missing: res.missing, errors: res.errors.length, duplicate_serials: res.dupSerial, blank_codes: res.blankCode, invalid_qty: res.badQty } }).then(() => {}, () => {});
       if (res.missing.length) { $('s4').innerHTML = `<div class="alert err"><b>This file cannot be used.</b> Missing required column(s): ${res.missing.map(esc).join(', ')}.</div>`; return; }
       const chk = bsNameCheck(res.names, store, allStores);
       if (chk.level !== 'none' && chk.level !== 'ok') {

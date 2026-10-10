@@ -94,3 +94,13 @@ details{margin:10px 0}summary{cursor:pointer;font-weight:600;color:#B91C1C;margi
 .opt mark{background:#FEE2E2;color:#B91C1C;padding:0 1px;border-radius:2px}
 .opt.sel{border-color:#E40000;background:#FEF2F2}
 #opts{max-height:300px;overflow:auto}
+/* ---- Phase 5: dashboards ---- */
+h3{font-size:15px;margin:20px 0 8px}
+.heads{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}.hcard{border-top:3px solid #D1D5DB}.hcard.crit{border-top-color:#DC2626}
+.hnum{font-size:30px;font-weight:800;margin:6px 0}.hnum small{font-size:12px;color:#6B7280;font-weight:500}.hrow{display:flex;gap:10px;flex-wrap:wrap;font-size:12px}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:16px}.dgrid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+.dflex{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.legend div{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.hbar{display:flex;height:12px;border-radius:6px;overflow:hidden;margin:6px 0;background:#E5E7EB}.hbar i{display:block}
+.kv.integ{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}.kv.integ b{font-size:18px}
+.acts{max-height:320px;overflow:auto}.act{display:grid;grid-template-columns:130px 1fr;gap:8px;font-size:12px;padding:6px 0;border-bottom:1px solid #F3F4F6}
+@media(max-width:700px){.act{grid-template-columns:1fr}}

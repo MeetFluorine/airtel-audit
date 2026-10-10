@@ -2,6 +2,13 @@
 const one = x => Array.isArray(x) ? x[0] : x;
 const tbl = (heads, body) => `<div class="tw"><table class="tbl"><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td colspan="${heads.length}" class="muted c">Nothing to show.</td></tr>`}</tbody></table></div>`;
 
+function reopenModal(sessionId, storeName, done) {
+  openModal('Reopen audit for ' + storeName + '?', `<p>The store will be able to add or remove items again. The current result is kept as history and a new version is started with the existing counts.</p>
+    <label>Reason (required)</label><textarea id="m_reason" rows="3" placeholder="e.g. 3 cartons found after initial submission."></textarea>`, [cancelBtn,
+    { label: 'REOPEN AUDIT', cls: 'danger', fn: async () => { const r = document.getElementById('m_reason').value.trim(); if (r.length < 5) { toast('Please enter a reason (at least 5 characters).', 'err'); return false; }
+      const { error } = await sb.rpc('reopen_audit', { p_session: sessionId, p_reason: r }); if (error) throw error; toast('Audit reopened as a new version.', 'ok'); done(); } }]);
+}
+
 /* ================= USERS ================= */
 PAGES.users = async el => {
   let stores = [], rows = [], filt = 'PENDING', q = '';
@@ -151,10 +158,7 @@ PAGES.cycles = async el => {
       if (b.dataset.act === 'back') return list();
       if (b.dataset.act === 'delc') return askDelete(id, cy.name, list);
       if (b.dataset.act === 'setst') { const { error } = await sb.from('audit_cycles').update({ status: el.querySelector('#st').value }).eq('id', id); if (error) return toast(rpcMsg(error), 'err'); toast('Status updated.', 'ok'); detail(id); }
-      if (b.dataset.act === 'reopen') openModal('Reopen audit for ' + b.dataset.n + '?', `<p>The store will be able to add or remove items again. The current result is kept as history and a new version is started with the existing counts.</p>
-        <label>Reason (required)</label><textarea id="m_reason" rows="3" placeholder="e.g. 3 cartons found after initial submission."></textarea>`, [cancelBtn,
-        { label: 'REOPEN AUDIT', cls: 'danger', fn: async () => { const r = document.getElementById('m_reason').value.trim(); if (r.length < 5) { toast('Please enter a reason (at least 5 characters).', 'err'); return false; }
-          const { error } = await sb.rpc('reopen_audit', { p_session: b.dataset.id, p_reason: r }); if (error) throw error; toast('Audit reopened as a new version.', 'ok'); detail(id); } }]);
+      if (b.dataset.act === 'reopen') reopenModal(b.dataset.id, b.dataset.n, () => detail(id));
       if (b.dataset.act === 'hist') openModal('Audit history · ' + b.dataset.n, (by[b.dataset.s] || []).map(v => `<div class="hist"><b>Version ${v.version}</b>
         ${v.reopened_at ? `<br>Reopened: ${fdt(v.reopened_at)}<br>Reason: “${esc(v.reopen_reason)}”` : ''}<br>${v.submitted_at ? 'Submitted: ' + fdt(v.submitted_at) : 'In progress (not yet submitted)'}</div>`).join(''), [{ label: 'Close' }]);
     };

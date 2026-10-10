@@ -86,11 +86,11 @@ function holdView(rejected) {
 
 function shell(page) {
   const p = S.profile, items = NAV[p.role] || NAV_STORE;
-  const cur = (items.some(i => i[0] === page) || page === 'result') ? page : 'dashboard'; S.cur = cur;
+  const cur = (items.some(i => i[0] === page) || page === 'result' || page === 'storedetail') ? page : 'dashboard'; S.cur = cur;
   const chip = p.role === 'STORE_USER' && S.store ? `${esc(S.store.name)} · ${esc(S.store.circles?.code || '')}`
     : p.role === 'CIRCLE_HEAD' ? esc(S.circles.map(c => c.code).join(', ') || 'No circles assigned') : 'All circles';
-  const title = (items.find(i => i[0] === cur) || ['result', 'Audit Result'])[1];
-  return `<div class="shell"><aside class="side">${brand()}<nav>${items.map(([k, l]) => `<a href="#/${k}" class="${k === cur ? 'on' : ''}">${l}</a>`).join('')}</nav></aside>
+  const title = (items.find(i => i[0] === cur) || [cur, cur === 'storedetail' ? 'Store Detail' : 'Audit Result'])[1];
+  return `<div class="shell"><aside class="side">${brand()}<nav>${items.map(([k, l]) => `<a href="#/${k}" class="${k === (cur === 'storedetail' ? 'dashboard' : cur) ? 'on' : ''}">${l}</a>`).join('')}</nav></aside>
     <div class="main"><header class="top"><h1>${title}</h1><div class="who"><span class="chip">${chip}</span>
       <span class="uname">${esc(p.full_name)}<small>${ROLE_LABEL[p.role]}</small></span><button class="btn sm" id="out">Log out</button></div></header>
     <main class="page">${pageBody(cur)}</main></div></div>`;
