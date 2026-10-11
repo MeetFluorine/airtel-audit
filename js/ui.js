@@ -75,3 +75,10 @@ function openModal(title, bodyHtml, actions = []) {
 }
 function closeModal() { const m = document.getElementById('modal'); if (m) { m.dispatchEvent(new Event('remove')); m.remove(); } }
 const cancelBtn = { label: 'Cancel' };
+
+// Long text cells (descriptions etc.) wrap inside a capped width; short cells stay on one line, so tables fit their card instead of stretching the page.
+(function () {
+  let queued = false;
+  const run = () => { queued = false; document.querySelectorAll('.tbl td:not([data-w])').forEach(td => { td.dataset.w = '1'; if (td.textContent.trim().length > 28) td.classList.add('wrap'); }); };
+  new MutationObserver(() => { if (!queued) { queued = true; (window.requestAnimationFrame || setTimeout)(run); } }).observe(document.documentElement, { childList: true, subtree: true });
+})();

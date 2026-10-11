@@ -13,10 +13,10 @@ const noCycle = el => { el.innerHTML = `<div class="card startcard"><span class=
 const numPager = (total, page, PS) => { const n = Math.max(1, Math.ceil(total / PS)); const from = total ? page * PS + 1 : 0, to = Math.min(total, (page + 1) * PS);
   return `<div class="bar"><span class="muted">Showing ${from}–${to} of ${total}</span><div class="pg"><button data-np="${page - 1}" ${page ? '' : 'disabled'}>‹</button>${Array.from({ length: Math.min(n, 5) }, (_, i) => { const p = Math.min(Math.max(page - 2, 0), Math.max(n - 5, 0)) + i; return `<button data-np="${p}" class="${p === page ? 'on' : ''}">${p + 1}</button>`; }).join('')}<button data-np="${page + 1}" ${page + 1 < n ? '' : 'disabled'}>›</button></div></div>`; };
 
-function donut(parts, label, sub) {
-  const total = parts.reduce((a, p) => a + p.v, 0), R = 40, C = 2 * Math.PI * R; let off = 0;
-  const segs = parts.filter(p => p.v > 0).map(p => { const len = total ? C * p.v / total : 0; const s = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${p.color}" stroke-width="16" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off += len; return s; }).join('');
-  return `<svg viewBox="0 0 120 120" width="140" height="140" role="img" aria-label="${esc(sub)}"><circle cx="60" cy="60" r="${R}" fill="none" stroke="#EEF3F1" stroke-width="16"/>${segs}<text x="60" y="60" text-anchor="middle" font-size="21" font-weight="800" fill="#0B2A1F">${esc(label)}</text><text x="60" y="76" text-anchor="middle" font-size="9" fill="#6B7B75">${esc(sub)}</text></svg>`;
+function donut(parts, label, sub, size = 140, sw = 16) {
+  const total = parts.reduce((a, p) => a + p.v, 0), R = 60 - sw / 2 - 2, C = 2 * Math.PI * R; let off = 0;
+  const segs = parts.filter(p => p.v > 0).map(p => { const len = total ? C * p.v / total : 0; const s = `<circle cx="60" cy="60" r="${R}" fill="none" stroke="${p.color}" stroke-width="${sw}" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off += len; return s; }).join('');
+  return `<svg viewBox="0 0 120 120" width="${size}" height="${size}" role="img" aria-label="${esc(sub)}"><circle cx="60" cy="60" r="${R}" fill="none" stroke="#EEF3F1" stroke-width="${sw}"/>${segs}<text x="60" y="${String(label).length > 5 ? 59 : 60}" text-anchor="middle" font-size="${String(label).length > 6 ? 14 : String(label).length > 4 ? 17 : 22}" font-weight="800" fill="#0B2A1F">${esc(label)}</text><text x="60" y="75" text-anchor="middle" font-size="8.5" fill="#6B7B75">${esc(sub)}</text></svg>`;
 }
 function donutArgs(a) { return a; }   // (kept for readability)
 

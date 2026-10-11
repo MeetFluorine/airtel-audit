@@ -11,7 +11,7 @@ const HEAD = { dashboard: ['Dashboard', 'Overview of store audits across all cir
   stores: ['Stores', 'Manage all stores across circles.'], users: ['Users', 'Manage application users, roles and store assignments.'], storeaudit: ['Store Audit', 'Monitor store-wise audit progress, view variances and drill down to detailed records.'],
   basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'] };
 
-const S = { session: null, profile: null, store: null, circles: [], recovery: false, cycles: [], cycleId: null, cycleName: '', progress: null, open: {}, ctx: null };
+const S = { session: null, profile: null, store: null, circles: [], recovery: false, cycles: [], cycleId: null, cycleName: '', progress: null, openGroup: null, ctx: null };
 const root = () => document.getElementById('app');
 const isStaff = () => S.profile && S.profile.role !== 'STORE_USER';
 
@@ -35,14 +35,16 @@ async function boot() {
   if (localStorage.getItem('sfx_remember') === '0' && !sessionStorage.getItem('sfx_alive')) { await sb.auth.signOut(); }
   const { data } = await sb.auth.getSession(); S.session = data.session;
   if (S.session) {
-    root().innerHTML = loadingView('verify');
+    if (!S.profile) root().innerHTML = loadingView('verify');     // only on the very first load, never when moving between pages
     await loadProfile();
     if (S.profile && !sessionStorage.getItem('sfx_login')) { sessionStorage.setItem('sfx_login', '1'); sb.rpc('log_login').then(() => {}, () => {}); }
   } else S.profile = null;
   route();
 }
-sb.auth.onAuthStateChange(event => {
-  if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') return;
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') { if (session && S.session) S.session = session; return; }
+  // Switching back to this browser tab re-fires SIGNED_IN for the SAME user: keep the page and the data exactly as they are.
+  if (event === 'SIGNED_IN' && session && S.session && S.profile && S.session.user.id === session.user.id) { S.session = session; return; }
   if (event === 'PASSWORD_RECOVERY') S.recovery = true;
   if (event === 'SIGNED_OUT') { sessionStorage.removeItem('sfx_login'); sessionStorage.removeItem('sfx_alive'); }
   setTimeout(boot, 0);
@@ -109,7 +111,7 @@ function storeSidebar(cur) {
 function staffSidebar(cur) {
   const g = GROUP_OF[cur];
   const nav = NAV_STAFF.map(n => n.k ? `<a href="#/${n.k}" class="${n.k === cur ? 'on' : ''}">${ic(n.i, 19)}${n.t}</a>`
-    : `<button class="grp ${n.g === g ? 'on' : ''} ${(n.g === g || S.open[n.g]) ? 'open' : ''}" data-grp="${n.g}">${ic(n.i, 19)}${n.t}${ic('chev', 16)}</button><div class="sub ${(n.g === g || S.open[n.g]) ? 'open' : ''}" data-sub="${n.g}">${n.kids.map(([k, l]) => `<a href="#/${k}" class="${k === cur ? 'on' : ''}">${l}</a>`).join('')}</div>`).join('');
+    : `<button class="grp ${n.g === g ? 'on' : ''} ${n.g === S.openGroup ? 'open' : ''}" data-grp="${n.g}">${ic(n.i, 19)}${n.t}${ic('chev', 16)}</button><div class="sub ${n.g === S.openGroup ? 'open' : ''}" data-sub="${n.g}">${n.kids.map(([k, l]) => `<a href="#/${k}" class="${k === cur ? 'on' : ''}">${l}</a>`).join('')}</div>`).join('');
   return `<aside class="sb staff"><div class="sb-brand">${LOGO(36)}<div><b>Shadowfax</b><small>AUDIT TRACKER</small></div></div><nav class="nv">${nav}</nav>${cycleWidgetHtml()}${userCard(S.profile.role === 'ADMIN' ? '' : esc(S.circles.map(c => c.code).join(', ')))}</aside>`;
 }
 const bell = () => `<div style="position:relative"><button class="bellb" id="bell" aria-label="Notifications">${ic('bell', 20)}<span class="dot" id="beldot" hidden></span></button><div class="pop" id="pop" hidden></div></div>`;
@@ -124,6 +126,7 @@ function storeTop() {
 }
 function shell(page) {
   const staff = isStaff(), cur = resolvePage(page, staff); S.cur = cur;
+  S.openGroup = GROUP_OF[cur] || null;      // every navigation collapses the other sections (accordion)
   return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg"><div class="boot">Loading…</div></div></main></div></div>`;
 }
 async function fillTop() {
@@ -140,7 +143,8 @@ async function fillTop() {
 }
 function wireShell() {
   const out = document.getElementById('out'); if (out) out.onclick = logout;
-  document.querySelectorAll('[data-grp]').forEach(b => b.onclick = () => { const g = b.dataset.grp; S.open[g] = !(S.open[g] || GROUP_OF[S.cur] === g); b.classList.toggle('open', S.open[g]); document.querySelector(`[data-sub="${g}"]`).classList.toggle('open', S.open[g]); });
+  document.querySelectorAll('[data-grp]').forEach(b => b.onclick = () => { const g = b.dataset.grp; S.openGroup = S.openGroup === g ? null : g;   // opening one section closes the others
+    document.querySelectorAll('[data-grp]').forEach(x => x.classList.toggle('open', x.dataset.grp === S.openGroup)); document.querySelectorAll('[data-sub]').forEach(x => x.classList.toggle('open', x.dataset.sub === S.openGroup)); });
   const bl = document.getElementById('bell'), pop = document.getElementById('pop');
   if (bl) bl.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; if (pop.hidden) return;
     if (isStaff()) pop.innerHTML = S.pending ? `<a href="#/users">${ic('users', 16)} ${S.pending} user request${S.pending === 1 ? '' : 's'} waiting for approval</a>` : '<div class="muted" style="padding:8px">You are all caught up.</div>';
