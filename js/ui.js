@@ -37,7 +37,7 @@ const fdt = d => d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month
 const rpcMsg = e => (e && ['42501', 'P0001', 'P0002'].includes(e.code) && e.message) ? e.message : friendlyError(e);
 
 async function getStores() {
-  const { data, error } = await sb.from('stores').select('id,code,name,report_name,active,circle_id,circles(code,name)').order('code');
+  const { data, error } = await sb.from('stores').select('id,code,name,report_name,active,circle_id,locator,store_type,circles(code,name)').order('code');
   if (error) throw error; return data;
 }
 async function getCircles() {

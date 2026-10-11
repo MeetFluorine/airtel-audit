@@ -53,11 +53,11 @@ if (typeof module !== 'undefined') module.exports = { bsValidate, bsNameCheck, b
 /* ---------------- UI ---------------- */
 if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
   const hq = new URLSearchParams((location.hash.split('?')[1]) || '');
-  const [cy, allStores] = await Promise.all([sb.from('audit_cycles').select('id,name,status').in('status', ['DRAFT', 'ACTIVE']).order('created_at', { ascending: false }), getStores()]);
-  if (cy.error) throw cy.error;
-  const st = { cycle: hq.get('c') || '', store: hq.get('s') || '', acs: [], res: null, file: null, ok: false };
+  if (!S.cycleId) return noCycle(el);
+  const allStores = await getStores(), cy = { data: [{ id: S.cycleId, name: S.cycleName }] };
+  const st = { cycle: S.cycleId, store: hq.get('s') || '', acs: [], res: null, file: null, ok: false };
   const sById = id => allStores.find(s => s.id === id);
-  el.innerHTML = `${cy.data.length ? '' : '<div class="alert warn">There is no active audit cycle yet. Create one in <a href="#/cycles">Audit Cycles</a> first.</div>'}<div class="card sec"><div class="step">1</div><b>Select audit cycle</b><select id="cyc"><option value="">Select cycle…</option>${cy.data.map(c => `<option value="${c.id}" ${c.id === st.cycle ? 'selected' : ''}>${esc(c.name)} (${c.status})</option>`).join('')}</select>
+  el.innerHTML = `${cy.data.length ? '' : '<div class="alert warn">There is no active audit cycle yet. Create one in <a href="#/cycles">Audit Cycles</a> first.</div>'}<div class="card sec"><div class="step">1</div><b>Audit cycle (change it from the sidebar)</b><select id="cyc" disabled>${cy.data.map(c => `<option value="${c.id}" selected>${esc(c.name)}</option>`).join('')}</select>
       <div class="step">2</div><b>Select store</b><select id="sto" disabled><option value="">Select store…</option></select><div id="sinfo"></div></div>
     <div class="card sec" id="s3" hidden><div class="step">3</div><b>Upload stock report (.xlsx / .xls)</b><input id="file" type="file" accept=".xlsx,.xls"><p class="muted">Only these columns are read: Item_Code, Inventory_Status, Item_Description, Item_UoM, Item_Qnty, Item_Quality, Item_SNo. Everything else is ignored.</p></div>
     <div id="s4"></div>`;
