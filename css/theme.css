@@ -240,3 +240,67 @@ input:disabled,select:disabled{background-color:#F3F7F5;color:#6B7B75;cursor:not
 .sumcard .sect{font-size:13px;font-weight:700;color:#0B2A1F;margin:16px 0 6px;display:block}
 .sumcard .vbar{grid-template-columns:128px 1fr 44px;font-size:12.5px}
 .lines{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.lines span{font-size:12px;background:#F1F6F4;border-radius:999px;padding:4px 10px;color:#44564F}
+
+/* =================== LAYOUT PASS 2: fixed shell, flyout menu, full-bleed banners, 100%-height login =================== */
+html,body{height:100%;overflow:hidden}
+#app{height:100%}
+/* the sidebar and top bar never move; only the content area scrolls */
+.app{height:100vh;min-height:0;overflow:hidden}
+.sb,.sb.store{position:static;height:100vh;overflow-y:auto;flex-shrink:0}
+.main2{height:100vh;overflow:hidden}
+.tb{flex:0 0 auto}
+.page2{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
+.page2.fixed{overflow:hidden;display:flex;flex-direction:column}
+.page2.fixed>#pg{flex:1;min-height:0;display:flex;flex-direction:column}
+/* smoothness */
+.nv a,.nv .grp,.btn,.tab,.opt,.eyeb{transition:background-color .15s ease,color .15s ease,border-color .15s ease,box-shadow .15s ease}
+#pg.fade{animation:pgin .22s ease both}
+@keyframes pgin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.boot{opacity:0;animation:pgin .2s ease .3s forwards}
+/* flyout sub-menu (opens beside the sidebar, like the reference) */
+.fly{position:fixed;z-index:40;min-width:268px;background:#fff;border:1px solid #E3ECE8;border-radius:16px;box-shadow:0 14px 40px rgba(2,37,27,.22);padding:8px;opacity:0;transform:translateX(-8px);pointer-events:none;transition:opacity .16s ease,transform .16s ease}
+.fly.open{opacity:1;transform:none;pointer-events:auto}
+.fly a{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;border-radius:11px;color:#0F1F1A;text-decoration:none}
+.fly a:hover{background:#F3F8F5}.fly a.on{background:#E3F6EA}.fly a.on b{color:#137A3F}
+.fly .ficon{width:34px;height:34px;border-radius:10px;background:#F1F6F4;color:#44564F;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}.fly a.on .ficon{background:#fff;color:#16A34A}
+.fly b{display:block;font-size:14px}.fly small{display:block;color:#6B7B75;font-size:12px;line-height:1.35;margin-top:1px}
+.nv .grp .chev{opacity:.7;transform:none!important}.nv .grp.open{background:rgba(255,255,255,.1)}.nv .grp.on.open{background:#FFD135}
+/* ---------- login / register: exactly one screen tall ---------- */
+.auth2{height:100vh;min-height:0;overflow:hidden;box-sizing:border-box;padding:16px}
+.auth-l{height:100%;min-height:0;box-sizing:border-box;display:flex;flex-direction:column;padding:clamp(22px,4.5vh,44px) clamp(28px,3.2vw,46px) 0;border-radius:24px;
+  background:linear-gradient(90deg,rgba(255,255,255,.94) 0%,rgba(255,255,255,.86) 34%,rgba(255,255,255,0) 64%),#FFFFFF url(../assets/banner.jpg) top center/100% auto no-repeat}
+.auth-l .scene{display:none}
+.auth-l h2{font-size:clamp(28px,5.2vh,40px);margin:clamp(14px,4vh,40px) 0 clamp(6px,1.4vh,12px)}
+.auth-l .desc{margin-bottom:clamp(10px,2.6vh,24px)}.feat{margin:clamp(8px,1.8vh,14px) 0}
+@media(max-height:700px){.feat:nth-of-type(3){display:none}.auth-l .desc{display:none}}
+.auth-r{height:100%;overflow-y:auto;box-sizing:border-box;padding:12px;margin-left:-26px;align-items:center}
+.auth-c{margin:auto;padding:clamp(18px,3.2vh,30px) clamp(24px,2.6vw,36px)}
+.auth-c .top{margin-bottom:clamp(8px,1.8vh,16px)}
+.auth-c .sub{margin-bottom:clamp(8px,1.8vh,16px)}.fld{margin-bottom:clamp(8px,1.5vh,14px)}.or{margin:clamp(8px,1.6vh,16px) 0}.foot{margin-top:clamp(8px,1.6vh,16px)}.rm{margin-bottom:clamp(8px,1.5vh,14px)}
+.auth-c .btn.go{min-height:clamp(42px,5.6vh,50px)}
+/* ---------- store dashboard: full-width banner with the Start Audit card on top of it ---------- */
+.hero2{position:relative;margin:-12px -28px 0;padding:clamp(22px,4vh,38px) 5vw clamp(22px,4vh,40px);min-height:clamp(380px,29vw,540px);display:flex;flex-direction:column;justify-content:space-between;gap:24px;
+  background:linear-gradient(90deg,rgba(255,255,255,.92) 0%,rgba(255,255,255,.78) 26%,rgba(255,255,255,0) 52%),#FFFFFF url(../assets/banner.jpg) top center/100% auto no-repeat;border-bottom:1px solid #E3ECE8}
+.hero2 h1{font-size:26px;margin:0 0 6px;color:#0B2A1F}.hero2 .hp{margin:0;font-size:15px;line-height:1.5;color:#44564F;max-width:340px}
+.hero2 .hero-card{width:100%;max-width:1100px;margin:0 auto;padding:20px 22px;box-shadow:0 12px 34px rgba(2,37,27,.14)}
+.kcenter{max-width:1100px;margin:22px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.kcenter .kv{display:contents}.kcenter .kv>div{text-align:center}
+/* ---------- result page: header, tabs and summary stay put; only the item list scrolls ---------- */
+.resfit{display:flex;flex-direction:column;flex:1;min-height:0}
+.resfit .resgrid{flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:stretch}
+.resleft{display:flex;flex-direction:column;min-height:0;min-width:0}
+.resleft #rt{display:flex;flex-direction:column;flex:1;min-height:0}
+.resleft #rt .tw{flex:1;min-height:0;overflow:auto}
+.resleft #rt .tbl th{position:sticky;top:0;z-index:1;background:#F6FAF8}
+.resfit .sumcard{position:static;height:100%;max-height:none;overflow:auto}
+/* ---------- small screens: normal page flow ---------- */
+@media(max-width:900px){
+  html,body{height:auto;overflow:auto}#app{height:auto}
+  .app{height:auto;overflow:visible}.sb,.sb.store{height:auto;overflow:visible}.main2{height:auto;overflow:visible}.page2,.page2.fixed{overflow:visible;display:block}.page2.fixed>#pg{display:block}
+  .auth2{height:auto;min-height:100vh;overflow:visible}.auth-r{height:auto;overflow:visible;margin:0}
+  .hero2{margin:-8px -14px 0;padding:22px 16px 22px;min-height:0;background-size:auto 220px;background-position:right top}
+  .resfit .resgrid{grid-template-rows:none}.resleft #rt .tw{overflow:auto}.resfit .sumcard{height:auto}
+}
+.auth2{grid-template-rows:minmax(0,1fr)}
+.auth-r{align-items:flex-start;justify-content:flex-start}
+.auth-c{margin:auto}

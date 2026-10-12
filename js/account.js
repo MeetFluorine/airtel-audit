@@ -14,7 +14,7 @@ PAGES.profile = async el => {
   el.innerHTML = staff ? `<div class="acctgrid">${info}${pw}</div>` : `<div class="pagehead"><div><h1>My Profile</h1><p>View and manage your profile information.</p></div></div>${info}<div style="height:16px"></div>${pw}`;
   const g = id => el.querySelector('#' + id).value;
   el.querySelector('#pf').onsubmit = e => { e.preventDefault(); busy(e.target.querySelector('button'), async () => {
-    const { error } = await sb.rpc('update_my_profile', { p_name: g('f_name').trim(), p_mobile: g('f_mob').trim() }); if (error) throw error; toast('Profile updated.', 'ok'); await loadProfile(); route(); }).catch(x => toast(rpcMsg(x), 'err')); };
+    const { error } = await sb.rpc('update_my_profile', { p_name: g('f_name').trim(), p_mobile: g('f_mob').trim() }); if (error) throw error; toast('Profile updated.', 'ok'); await loadProfile(); S.shellUser = null; route(); }).catch(x => toast(rpcMsg(x), 'err')); };
   el.querySelector('#pw').onsubmit = e => { e.preventDefault(); busy(e.target.querySelector('button'), async () => {
     if (g('p_new').length < 8) { toast('Password must be at least 8 characters.', 'err'); return; } if (g('p_new') !== g('p_cnf')) { toast('The new passwords do not match.', 'err'); return; }
     const chk = await sb.auth.signInWithPassword({ email: p.email, password: g('p_cur') }); if (chk.error) { toast('Current password is incorrect.', 'err'); return; }

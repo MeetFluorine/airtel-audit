@@ -49,10 +49,9 @@ async function storeDash(el) {
   const cta = !c.cycle ? '<div class="alert warn" style="margin:0">No audit is open for your store yet. Your administrator needs to open a cycle and upload your store\'s base stock.</div>'
     : s && s.status === 'LOCKED' ? `<a class="btn yel xl" href="#/result">${ic('clip', 20)} View Result ${ic('arrow', 20)}</a>`
     : `<a class="btn yel xl" href="#/audit">${ic('play', 20)} ${s ? 'Continue Audit' : 'Start Audit'} ${ic('arrow', 20)}</a>`;
-  el.innerHTML = `<div class="hero"><h1>${greet()}, ${esc(first)}! 👋</h1><p>Let's complete the physical stock audit<br>for your store.</p></div>
-    <div class="card hero-card"><div class="trio"><div><span class="tile">${ic('store', 24)}</span><div><small>Store</small><b>${esc(c.store.code)}</b></div></div><div><div><small>Circle</small><b>${esc(c.store.circle)}</b></div></div><div><div><small>Audit Cycle</small><b>${c.cycle ? esc(c.cycle.name) : '—'}</b></div></div></div>${cta}</div>
-    <div style="height:16px"></div>${sum ? kpis(sum) : ''}
-    ${s && s.status === 'IN_PROGRESS' ? `<div class="kv kpi"><div><span>Serialized scanned</span><b>${fn(cn.serial)}</b></div><div><span>Non-serialized entries</span><b>${fn(cn.entries)}</b></div><div><span>Total physical units</span><b>${fn(cn.units)}</b></div></div>` : ''}`;
+  el.innerHTML = `<div class="hero2"><div><h1>${greet()}, ${esc(first)}! 👋</h1><p class="hp">Let's complete the physical stock audit<br>for your store.</p></div>
+    <div class="card hero-card"><div class="trio"><div><span class="tile">${ic('store', 24)}</span><div><small>Store</small><b>${esc(c.store.code)}</b></div></div><div><div><small>Circle</small><b>${esc(c.store.circle)}</b></div></div><div><div><small>Audit Cycle</small><b>${c.cycle ? esc(c.cycle.name) : '—'}</b></div></div></div>${cta}</div></div>
+    <div class="kcenter">${sum ? kpis(sum) : ''}${s && s.status === 'IN_PROGRESS' ? `<div class="kv kpi"><div><span>Serialized scanned</span><b>${fn(cn.serial)}</b></div><div><span>Non-serialized entries</span><b>${fn(cn.entries)}</b></div><div><span>Total physical units</span><b>${fn(cn.units)}</b></div></div>` : ''}</div>`;
 }
 
 /* ---- audit entry point ---- */
@@ -240,9 +239,9 @@ async function resultView(el, sid, embedded) {
   const vb = Object.assign({ ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, (vbR && vbR.data) || {}), vmx = Math.max(1, vb.ser_short, vb.ser_excess, vb.non_short, vb.non_excess);
   const vr = (l, v, col) => `<div class="vbar"><span>${l}</span><div class="tr"><i style="width:${100 * v / vmx}%;background:${col}"></i></div><b>${fn(v)}</b></div>`;
   const mt = (i, l, bg, bd, tbg, fg, v) => `<div class="mtile" style="background:${bg};border-color:${bd}"><span class="tile" style="background:${tbg};color:${fg}">${ic(i, 17)}</span><span><small>${l}</small><b>${v}</b></span></div>`;
-  el.innerHTML = `${embedded ? '' : `<div class="pagehead"><div><a class="btn sm" href="${staff ? '#/storeaudit' : '#/dashboard'}" style="margin-bottom:10px">${ic('back', 15)} Back</a>
+  el.innerHTML = `<div class="resfit">${embedded ? '' : `<div class="pagehead"><div><a class="btn sm" href="${staff ? '#/storeaudit' : '#/dashboard'}" style="margin-bottom:10px">${ic('back', 15)} Back</a>
       <h1>Audit Result - ${esc(ss.stores?.code || '')} ${badge(ss.status === 'LOCKED' ? 'Completed' : 'Superseded version', ss.status === 'LOCKED' ? 'ok' : 'warn')}</h1><p>${esc(ss.audit_cycles?.name || '')} · Version ${ss.version} · Submitted ${fdt(ss.submitted_at)}</p></div><span class="live">${ic('lock', 14)} Locked</span></div>`}
-    <div class="resgrid"><div><div class="bar"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div></div>
+    <div class="resgrid"><div class="resleft"><div class="bar"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div></div>
         <div class="inp" style="margin-bottom:12px">${ic('search', 18)}<input id="q" placeholder="Search by item code, description or serial..."></div><div id="rt"></div></div>
       <div class="card sumcard"><div class="cardhead"><b style="font-size:16px">Audit Summary</b>${badge(m.match_rate == null ? 'No expected stock' : Number(m.match_rate).toFixed(1) + '% match', m.match_rate == null ? '' : m.match_rate >= 90 ? 'ok' : m.match_rate >= 75 ? 'warn' : 'bad')}</div>
         <span class="sect" style="margin-top:4px">Result Breakdown</span>
@@ -250,7 +249,8 @@ async function resultView(el, sid, embedded) {
         <div class="legend2">${[['Matched', '#16A34A', matched], ['Short', '#E5484D', shortU], ['Excess', '#F5B301', excessU]].map(([l, c, v]) => `<div class="row3"><i style="background:${c}"></i><span>${l}</span><b>${fn(v)}</b><span>${totalU ? (100 * v / totalU).toFixed(1) : '0.0'}%</span></div>`).join('')}</div>
         <div class="mgrid">${mt('box', 'Expected', '#F3F6FF', '#DCE5FA', '#E5EDFF', '#2563EB', fn(m.expected))}${mt('check', 'Found', '#EEF9F2', '#CBEBD8', '#E6F7EC', '#16A34A', fn(m.physical))}${mt('alert', 'Short', '#FFF1F1', '#F8D3D3', '#FFE0E0', '#E5484D', fn(shortU))}${mt('zap', 'Excess', '#FFF9E6', '#F6E3A4', '#FFF1CC', '#C58A00', fn(excessU))}</div>
         <span class="sect">Variance by type</span>${vr('Serialized Short', vb.ser_short, '#E5484D')}${vr('Non-Serialized Short', vb.non_short, '#F59E0B')}${vr('Serialized Excess', vb.ser_excess, '#2563EB')}${vr('Non-Serialized Excess', vb.non_excess, '#14B8A6')}
-        <div class="lines"><span>${fn(m.rows_match)} matched lines</span><span>${fn(m.rows_short)} short lines</span><span>${fn(m.rows_excess)} excess lines</span></div></div></div>`;
+        <div class="lines"><span>${fn(m.rows_match)} matched lines</span><span>${fn(m.rows_short)} short lines</span><span>${fn(m.rows_excess)} excess lines</span></div></div></div></div>`;
+  const pg2 = el.closest('.page2'); if (pg2 && !embedded) pg2.classList.add('fixed');
   const mark = () => el.querySelectorAll('#rtabs [data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab));
   async function load() {
     mark(); const rt = el.querySelector('#rt'); rt.innerHTML = '<div class="boot">Loading…</div>';

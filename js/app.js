@@ -6,12 +6,16 @@ const NAV_STAFF = [{ k: 'dashboard', t: 'Dashboard', i: 'home' },
   { g: 'mgmt', t: 'Management', i: 'grid', kids: [['stores', 'Stores'], ['users', 'Users']] },
   { g: 'ops', t: 'Operations', i: 'scan', kids: [['storeaudit', 'Store Audit'], ['basestock', 'Base Stock']] },
   { k: 'profile', t: 'My Account', i: 'user' }];
+const FLY = {   // sub-menus open in a flyout beside the sidebar (title, description, icon)
+  reports: [['reports', 'Reports', 'Download audit reports and Excel exports', 'file'], ['logs', 'Audit Logs', 'Track activities and changes in the system', 'clip']],
+  mgmt: [['stores', 'Stores', 'Manage stores, circles and store types', 'store'], ['users', 'Users', 'Approve users, roles and store assignments', 'users']],
+  ops: [['storeaudit', 'Store Audit', 'Monitor store-wise progress and drill down', 'scan'], ['basestock', 'Base Stock', "Upload and freeze each store's base stock", 'box']] };
 const GROUP_OF = { reports: 'reports', logs: 'reports', stores: 'mgmt', users: 'mgmt', storeaudit: 'ops', basestock: 'ops', storedetail: 'ops', result: 'ops' };
 const HEAD = { dashboard: ['Dashboard', 'Overview of store audits across all circles.'], reports: ['Reports', 'Download audit reports, analytics and export data.'], logs: ['Audit Logs', 'Track all activities and changes in the system.'],
   stores: ['Stores', 'Manage all stores across circles.'], users: ['Users', 'Manage application users, roles and store assignments.'], storeaudit: ['Store Audit', 'Monitor store-wise audit progress, view variances and drill down to detailed records.'],
   basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'] };
 
-const S = { session: null, profile: null, store: null, circles: [], recovery: false, cycles: [], cycleId: null, cycleName: '', progress: null, openGroup: null, ctx: null };
+const S = { session: null, profile: null, store: null, circles: [], recovery: false, cycles: [], cycleId: null, cycleName: '', progress: null, openGroup: null, ctx: null, shellUser: null };
 const root = () => document.getElementById('app');
 const isStaff = () => S.profile && S.profile.role !== 'STORE_USER';
 
@@ -33,7 +37,7 @@ async function loadProfile() {
 }
 async function boot() {
   if (localStorage.getItem('sfx_remember') === '0' && !sessionStorage.getItem('sfx_alive')) { await sb.auth.signOut(); }
-  const { data } = await sb.auth.getSession(); S.session = data.session;
+  const { data } = await sb.auth.getSession(); S.session = data.session; if (!S.session) S.shellUser = null;
   if (S.session) {
     if (!S.profile) root().innerHTML = loadingView('verify');     // only on the very first load, never when moving between pages
     await loadProfile();
@@ -46,7 +50,7 @@ sb.auth.onAuthStateChange((event, session) => {
   // Switching back to this browser tab re-fires SIGNED_IN for the SAME user: keep the page and the data exactly as they are.
   if (event === 'SIGNED_IN' && session && S.session && S.profile && S.session.user.id === session.user.id) { S.session = session; return; }
   if (event === 'PASSWORD_RECOVERY') S.recovery = true;
-  if (event === 'SIGNED_OUT') { sessionStorage.removeItem('sfx_login'); sessionStorage.removeItem('sfx_alive'); }
+  if (event === 'SIGNED_OUT') { sessionStorage.removeItem('sfx_login'); sessionStorage.removeItem('sfx_alive'); S.shellUser = null; }
   setTimeout(boot, 0);
 });
 window.addEventListener('hashchange', route);
@@ -111,7 +115,7 @@ function storeSidebar(cur) {
 function staffSidebar(cur) {
   const g = GROUP_OF[cur];
   const nav = NAV_STAFF.map(n => n.k ? `<a href="#/${n.k}" class="${n.k === cur ? 'on' : ''}">${ic(n.i, 19)}${n.t}</a>`
-    : `<button class="grp ${n.g === g ? 'on' : ''} ${n.g === S.openGroup ? 'open' : ''}" data-grp="${n.g}">${ic(n.i, 19)}${n.t}${ic('chev', 16)}</button><div class="sub ${n.g === S.openGroup ? 'open' : ''}" data-sub="${n.g}">${n.kids.map(([k, l]) => `<a href="#/${k}" class="${k === cur ? 'on' : ''}">${l}</a>`).join('')}</div>`).join('');
+    : `<button class="grp ${n.g === g ? 'on' : ''}" data-grp="${n.g}" aria-haspopup="true">${ic(n.i, 19)}${n.t}${ic('chevr', 16)}</button>`).join('');
   return `<aside class="sb staff"><div class="sb-brand">${LOGO(36)}<div><b>Shadowfax</b><small>AUDIT TRACKER</small></div></div><nav class="nv">${nav}</nav>${cycleWidgetHtml()}${userCard(S.profile.role === 'ADMIN' ? '' : esc(S.circles.map(c => c.code).join(', ')))}</aside>`;
 }
 const bell = () => `<div style="position:relative"><button class="bellb" id="bell" aria-label="Notifications">${ic('bell', 20)}<span class="dot" id="beldot" hidden></span></button><div class="pop" id="pop" hidden></div></div>`;
@@ -126,8 +130,7 @@ function storeTop() {
 }
 function shell(page) {
   const staff = isStaff(), cur = resolvePage(page, staff); S.cur = cur;
-  S.openGroup = GROUP_OF[cur] || null;      // every navigation collapses the other sections (accordion)
-  return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg"><div class="boot">Loading…</div></div></main></div></div>`;
+  return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg"><div class="boot">Loading…</div></div></main></div></div>`;
 }
 async function fillTop() {
   try {
@@ -141,10 +144,32 @@ async function fillTop() {
     }
   } catch (e) { /* topbar extras are optional */ }
 }
+function openFly(btn) {
+  const fly = document.getElementById('fly'), sbEl = document.querySelector('.sb'); if (!fly || !FLY[btn.dataset.grp]) return;
+  const r = btn.getBoundingClientRect(), sr = sbEl.getBoundingClientRect(), mobile = window.innerWidth <= 900;
+  fly.innerHTML = FLY[btn.dataset.grp].map(([k, t, d, i]) => `<a href="#/${k}" class="${k === S.cur ? 'on' : ''}"><span class="ficon">${ic(i, 18)}</span><span><b>${t}</b><small>${d}</small></span></a>`).join('');
+  fly.style.left = (mobile ? Math.max(8, r.left) : sr.right + 10) + 'px'; fly.style.top = (mobile ? r.bottom + 6 : Math.max(8, r.top - 6)) + 'px';
+  fly.classList.add('open'); S.openGroup = btn.dataset.grp;
+  document.querySelectorAll('[data-grp]').forEach(x => x.classList.toggle('open', x === btn));
+}
+function closeFly() { const f = document.getElementById('fly'); if (f) f.classList.remove('open'); S.openGroup = null; document.querySelectorAll('[data-grp]').forEach(x => x.classList.remove('open')); }
+// Move between pages WITHOUT redrawing the sidebar / top bar: only the content changes (smooth, no flicker).
+function updateShell(cur) {
+  S.cur = cur; closeFly();
+  document.querySelectorAll('.sb .nv > a[href]').forEach(x => x.classList.toggle('on', x.getAttribute('href') === '#/' + cur));
+  document.querySelectorAll('.sb .nv .grp').forEach(x => x.classList.toggle('on', x.dataset.grp === GROUP_OF[cur]));
+  const t = document.querySelector('.tb-t'); if (t && isStaff()) { const [h, s] = HEAD[cur] || ['', '']; t.innerHTML = h ? `<h1>${h}</h1><p>${s}</p>` : ''; }
+  const p2 = document.querySelector('.page2'); if (p2) { p2.classList.remove('fixed'); p2.scrollTop = 0; }
+  if (isStaff() && typeof refreshProgress === 'function') refreshProgress();     // keep the sidebar progress bar current
+  const old = document.getElementById('pg'), pg = document.createElement('div'); pg.id = 'pg'; pg.className = 'fade'; pg.innerHTML = '<div class="boot">Loading…</div>'; old.replaceWith(pg);   // fresh element: no stale handlers
+  if (PAGES[cur]) PAGES[cur](pg).catch(e => { console.error(e); pg.innerHTML = '<div class="alert err">Could not load this page. ' + esc(friendlyError(e)) + '</div>'; });
+}
 function wireShell() {
-  const out = document.getElementById('out'); if (out) out.onclick = logout;
-  document.querySelectorAll('[data-grp]').forEach(b => b.onclick = () => { const g = b.dataset.grp; S.openGroup = S.openGroup === g ? null : g;   // opening one section closes the others
-    document.querySelectorAll('[data-grp]').forEach(x => x.classList.toggle('open', x.dataset.grp === S.openGroup)); document.querySelectorAll('[data-sub]').forEach(x => x.classList.toggle('open', x.dataset.sub === S.openGroup)); });
+  const outBtn = document.getElementById('out'); if (outBtn) outBtn.onclick = logout;
+  document.querySelectorAll('[data-grp]').forEach(b => b.onclick = e => { e.stopPropagation(); S.openGroup === b.dataset.grp ? closeFly() : openFly(b); });
+  const fly = document.getElementById('fly'); if (fly) fly.onclick = e => { if (e.target.closest('a')) closeFly(); };
+  if (S.flyOff) S.flyOff(); const out = () => closeFly(), esc2 = e => { if (e.key === 'Escape') closeFly(); };
+  document.addEventListener('click', out); document.addEventListener('keydown', esc2); S.flyOff = () => { document.removeEventListener('click', out); document.removeEventListener('keydown', esc2); };
   const bl = document.getElementById('bell'), pop = document.getElementById('pop');
   if (bl) bl.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; if (pop.hidden) return;
     if (isStaff()) pop.innerHTML = S.pending ? `<a href="#/users">${ic('users', 16)} ${S.pending} user request${S.pending === 1 ? '' : 's'} waiting for approval</a>` : '<div class="muted" style="padding:8px">You are all caught up.</div>';
@@ -168,7 +193,11 @@ async function route() {
   }
   else if (!S.profile || S.profile.status === 'PENDING') html = holdView(false);
   else if (S.profile.status === 'REJECTED') html = holdView(true);
-  else { html = shell(h); wire = wireShell; }
+  else {
+    const cur = resolvePage(h, isStaff());
+    if (S.shellUser === S.profile.id && document.getElementById('pg') && document.querySelector('.app')) { updateShell(cur); return; }
+    S.shellUser = S.profile.id; html = shell(h); wire = wireShell;
+  }
   root().innerHTML = html; wire();
   document.querySelectorAll('[data-eye]').forEach(b => b.onclick = () => { const i = document.getElementById(b.dataset.eye); const show = i.type === 'password'; i.type = show ? 'text' : 'password'; b.innerHTML = ic(show ? 'eye' : 'eyeoff', 18); });
   const out = document.getElementById('out'); if (out && !S.profile) out.onclick = logout; else if (out && S.profile && S.profile.status !== 'APPROVED') out.onclick = logout;

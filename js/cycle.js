@@ -34,16 +34,16 @@ async function purgeCycleFiles(cycleId) {   // original Excel backups of the cyc
 }
 function wireCycle() {
   const $ = id => document.getElementById(id);
-  if ($('cyc-load')) $('cyc-load').onclick = () => { applyCycle($('cyc-sel').value); route(); };
+  if ($('cyc-load')) $('cyc-load').onclick = () => { applyCycle($('cyc-sel').value); S.shellUser = null; route(); };
   if ($('cyc-new')) $('cyc-new').onclick = () => openModal('Create new audit cycle', `<p class="muted">Every store takes part. The new cycle becomes the current cycle for all store users, and the previous cycle is closed (its data stays until you delete it).</p>
       <label>Cycle name</label><input id="m_cname" placeholder="e.g. OCT-2026" autocomplete="off">`, [cancelBtn,
       { label: 'Create cycle', cls: 'primary', fn: async () => { const n = document.getElementById('m_cname').value.trim(); if (n.length < 2) { toast('Please enter a cycle name.', 'err'); return false; }
-        const { data, error } = await sb.rpc('admin_create_cycle', { p_name: n }); if (error) throw error; await loadCycles(); applyCycle(data); toast('Cycle created.', 'ok'); route(); } }]);
+        const { data, error } = await sb.rpc('admin_create_cycle', { p_name: n }); if (error) throw error; await loadCycles(); applyCycle(data); toast('Cycle created.', 'ok'); S.shellUser = null; route(); } }]);
   if ($('cyc-del')) $('cyc-del').onclick = () => { const id = $('cyc-sel').value, c = S.cycles.find(x => x.id === id); if (!c) return;
     const o = openModal('Delete audit cycle permanently?', `<p>This permanently deletes <b>${esc(c.name)}</b> and <b>all of its data</b>: base stock for every store, all audits, scanned items, entries and results.</p>
       <p class="muted">There is no archive and it cannot be undone. The audit log keeps a record that the cycle was deleted.</p><label class="chk"><input type="checkbox" id="m_ok"> I understand this cannot be undone.</label>`,
       [cancelBtn, { label: 'Delete permanently', cls: 'danger', fn: async () => { await purgeCycleFiles(id); const { data, error } = await sb.rpc('admin_purge_cycle', { p_cycle: id }); if (error) throw error;
-        await loadCycles(); toast(`Deleted ${data.name}: ${data.audits} audit(s), ${data.base_rows} base rows, ${data.result_rows} result rows.`, 'ok'); route(); } }]);
+        await loadCycles(); toast(`Deleted ${data.name}: ${data.audits} audit(s), ${data.base_rows} base rows, ${data.result_rows} result rows.`, 'ok'); S.shellUser = null; route(); } }]);
     const go = o.querySelector('.ma .danger'); go.disabled = true; o.querySelector('#m_ok').onchange = e => (go.disabled = !e.target.checked); };
   refreshProgress();
 }
