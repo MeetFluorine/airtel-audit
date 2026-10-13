@@ -11,7 +11,7 @@ const FLY = {   // sub-menus open in a flyout beside the sidebar (title, descrip
   mgmt: [['stores', 'Stores', 'Manage stores, circles and store types', 'store'], ['users', 'Users', 'Approve users, roles and store assignments', 'users']],
   ops: [['storeaudit', 'Store Audit', 'Monitor store-wise progress and drill down', 'scan'], ['basestock', 'Base Stock', "Upload and freeze each store's base stock", 'box']] };
 const GROUP_OF = { reports: 'reports', logs: 'reports', stores: 'mgmt', users: 'mgmt', storeaudit: 'ops', basestock: 'ops', storedetail: 'ops', result: 'ops' };
-const HEAD = { dashboard: ['Dashboard', 'Overview of store audits across all circles.'], reports: ['Reports', 'Download audit reports, analytics and export data.'], logs: ['Audit Logs', 'Track all activities and changes in the system.'],
+const HEAD = { dashboard: ['Dashboard', 'Complete overview of store audits, stock status and key metrics.'], reports: ['Reports', 'Download audit reports, analytics and export data.'], logs: ['Audit Logs', 'Track all activities and changes in the system.'],
   stores: ['Stores', 'Manage all stores across circles.'], users: ['Users', 'Manage application users, roles and store assignments.'], storeaudit: ['Store Audit', 'Monitor store-wise audit progress, view variances and drill down to detailed records.'],
   basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'] };
 

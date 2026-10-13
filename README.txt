@@ -1,4 +1,5 @@
-Shadowfax Airtel Store Audit Tracker  -  layout fix pass 2 (no new SQL)
+Shadowfax Airtel Store Audit Tracker  -  admin Dashboard redesign (no new SQL)
+CHANGED: Dashboard menu for Admin / Circle Head only (js/dashboard.js adminDash, css/admin-dashboard.css, 1 link in index.html, 1 subtitle line in js/app.js). All other pages untouched.
 
 DATABASE: nothing new to run. Already run: 01, 03 - 11.
 APP (static, no build step): upload index.html, css/, js/, assets/ to Netlify (same site > Deploys),
