@@ -5,3 +5,9 @@ DATABASE: nothing new to run. Already run: 01, 03 - 11.
 APP (static, no build step): upload index.html, css/, js/, assets/ to Netlify (same site > Deploys),
   then hard-refresh (Ctrl+Shift+R). Never put the service_role key in this repo.
 BANNER: assets/banner.jpg (your supplied image). Replace that one file to change it everywhere.
+
+
+---- Store audit page: "what is left to audit" checklist ----
+1) Run database/12_audit_checklist.sql once in the Supabase SQL editor (safe to re-run).
+2) Upload the files as usual. Changed: js/audit.js, css/audit-checklist.css (new), index.html (1 link).
+Until step 1 is done the audit page works exactly as before; the checklist just stays hidden.

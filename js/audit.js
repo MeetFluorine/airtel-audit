@@ -72,21 +72,21 @@ PAGES.audit = async el => {
 /* ---- scanner ---- */
 function scanner(el, c) {
   const sid = c.session.id; Q.init(sid);
-  const st = { counts: c.counts || { serial: 0, entries: 0, units: 0 }, recent: [], net: navigator.onLine, pick: null, opts: [] };
+  const st = { counts: c.counts || { serial: 0, entries: 0, units: 0 }, recent: [], net: navigator.onLine, pick: null, opts: [], ck: null };
   el.innerHTML = `${c.session.reopen_reason ? `<div class="alert warn"><b>Your audit was reopened by an administrator</b> (${fdt(c.session.reopened_at)}): ${esc(c.session.reopen_reason)}. Your earlier counts are kept; add what was missed and submit again.</div>` : ''}
     <div class="scanhead"><div class="tabs seg"><button class="tab on" data-t="ser">Serialized Scan</button><button class="tab" data-t="non">Non-Serialized Entry</button></div>${livePill()}</div>
     <div class="aud"><div class="aud-main">
       <div id="p-ser" class="card" style="padding:20px"><div class="scan-title"><span class="tile">${ic('barcode', 22)}</span><div><b>Scan Serial Number</b><span>Use barcode scanner or enter manually</span></div></div>
         <div class="scanwrap"><input id="scan" class="scan-in" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Scan or enter serial number..."><button class="sbtn" id="sfocus" type="button" aria-label="Focus scanner">${ic('scan', 20)}</button></div>
         <div id="res" class="resp idle">Ready to scan</div><div style="margin-top:12px"><button class="btn" id="clr" style="width:100%;padding:12px">Clear</button></div>
-        <div id="unl" class="resp err" hidden><div class="rt">Serial not found in your store base stock</div><div class="muted" id="unl-s"></div><label for="uc">Please enter Item Code</label><input id="uc" autocomplete="off" placeholder="Item Code"><div class="ma" style="margin-top:10px"><button class="btn" id="unl-skip">Skip</button><button class="btn yel" id="unl-add">Add as Physical Stock</button></div></div></div>
+        <div id="unl" class="resp err" hidden><div class="rt">Serial not found in your store base stock</div><div class="muted" id="unl-s"></div><label for="uc">Please enter Item Code</label><input id="uc" autocomplete="off" placeholder="Item Code"><div class="ma" style="margin-top:10px"><button class="btn" id="unl-skip">Skip</button><button class="btn yel" id="unl-add">Add as Physical Stock</button></div></div><div class="ck" id="ck-ser"></div></div>
       <div id="p-non" class="nsgrid" hidden>
         <div class="card" style="padding:18px"><b>Select / Enter Item Code</b><div class="inp" style="margin:10px 0">${ic('search', 18)}<input id="ic" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Search item code..."></div><div id="opts" class="itemlist"></div></div>
         <div class="card" style="padding:18px"><div class="cardhead"><b>Item Details</b><a href="#/audit?view=preview">View All ${ic('arrow', 14)}</a></div><div id="idet" class="muted">Select an item from the list.</div>
           <b style="display:block;margin:14px 0 8px">Enter Physical Quantity</b><div class="qty"><button id="qm" type="button">−</button><input id="qty" type="number" min="0" step="any" value="1" inputmode="decimal"><button id="qp" type="button">+</button></div>
-          <button class="btn yel xl" id="addn" disabled style="margin-top:14px">Add to Entry List ${ic('arrow', 18)}</button><div id="nres" class="resp idle">Counts are blind: the system quantity is never shown.</div></div></div></div>
+          <button class="btn yel xl" id="addn" disabled style="margin-top:14px">Add to Entry List ${ic('arrow', 18)}</button><div id="nres" class="resp idle">Counts are blind: the system quantity is never shown.</div></div><div class="card ck ckwide" id="ck-non"></div></div></div>
     <aside class="aud-side"><div class="card" style="padding:16px"><div class="bar" style="margin-bottom:6px"><b>Audit progress</b><span id="net"></span></div>
-        <div class="kv"><div><span>Serialized</span><b id="c-ser">0</b></div><div><span>Non-serialized</span><b id="c-ent">0</b></div><div><span>Total units</span><b id="c-units">0</b></div></div><div class="sync" id="sync"></div></div>
+        <div class="kv"><div><span>Serialized</span><b id="c-ser">0</b></div><div><span>Non-serialized</span><b id="c-ent">0</b></div><div><span>Total units</span><b id="c-units">0</b></div></div><div class="sync" id="sync"></div><div class="ckmini" id="ck-side"></div></div>
       <div class="card" style="padding:16px;margin-top:14px"><div class="cardhead"><b>Recent Scans</b><a href="#/audit?view=preview">View All ${ic('arrow', 14)}</a></div><div id="recent" class="muted">Nothing yet</div></div></aside></div>
     <div class="bar" style="margin-top:16px"><span></span><a class="btn yel" href="#/audit?view=preview" style="padding:13px 22px">Preview &amp; complete audit ${ic('arrow', 18)}</a></div>`;
   const $ = id => el.querySelector('#' + id), scan = $('scan');
@@ -96,6 +96,7 @@ function scanner(el, c) {
     $('c-ser').textContent = fn(st.counts.serial); $('c-ent').textContent = fn(st.counts.entries); $('c-units').textContent = fn(st.counts.units);
     const pend = Q.items.length, synced = Number(st.counts.serial) + Number(st.counts.entries);
     $('sync').innerHTML = `Scanned: <b>${fn(synced + pend)}</b> · Synced: <b>${fn(synced)}</b> · Pending: <b>${fn(pend)}</b>`;
+    paintCk(); paintSide();
     $('net').innerHTML = !st.net ? badge('Offline', 'bad') : pend ? badge('Syncing', 'warn') : badge('Synced', 'ok');
     $('recent').innerHTML = st.recent.length ? `<table class="rtab"><thead><tr><th>Time</th><th>Serial / Item</th><th>Status</th></tr></thead><tbody>${st.recent.map(r => `<tr><td>${r.t}</td><td>${esc(r.sn || r.code || '')}</td><td>${badge(r.s, r.k)}</td></tr>`).join('')}</tbody></table>` : 'Nothing yet';
   }
@@ -116,6 +117,11 @@ function scanner(el, c) {
       if (err) { showRes(it.kind === 'non' ? 'nres' : 'res', 'err', 'Could not save', esc(rpcMsg(err))); recent(it.label, '', 'Error', 'bad'); beep(false); paint(); return focusScan(); }
       if (d.counts) st.counts = d.counts;
       const s = d.status;
+      if (st.ck) {
+        if (s === 'MATCHED') { st.ck.serial.found = Number(st.ck.serial.found) + 1; const it = st.ck.serial.items.find(x => x.item_code === d.item_code); if (it) it.scanned = Number(it.scanned) + 1; }
+        else if (s === 'UNLISTED_ADDED') st.ck.serial.extra = Number(st.ck.serial.extra) + 1;
+        else if (s === 'ADDED' || s === 'REPLAY') reloadCk();
+      }
       if (s === 'MATCHED') { showRes('res', 'ok', `<span>${ic('check', 18)} Serial scanned successfully!</span>${badge('Matched', 'ok')}`, rg([['Item Code', d.item_code], ['Description', d.item_description], ['Inventory Status', d.inventory_status], ['UoM', d.item_uom], ['Quality', d.item_quality], ['Serial Number', d.serial]])); recent(d.item_code, d.serial, 'Matched', 'ok'); beep(true); }
       else if (s === 'DUPLICATE') { showRes('res', 'warn', '⚠ Already Scanned', `<div class="rg"><span>Serial</span><b>${esc(d.serial)}</b></div><div class="muted">Previously scanned in this audit.</div>`); recent('', d.serial, 'Duplicate', 'warn'); beep(false); }
       else if (s === 'UNLISTED_ADDED') { showRes('res', 'err', 'Added as physical stock', rg([['Item Code', d.item_code], ['Serial', d.serial]]) + '<div class="muted">Not in your store base stock.</div>'); recent(d.item_code, d.serial, 'Unlisted', 'bad'); beep(false); }
@@ -162,6 +168,61 @@ function scanner(el, c) {
     Q.push({ kind: 'non', rpc: 'add_non_serial', args: { p_session: sid, p_code: st.pick.item_code, p_status: st.pick.inventory_status || '', p_quality: st.pick.item_quality || '', p_qty: q, p_event: uid() }, label: st.pick.item_code });
     $('ic').value = ''; $('opts').innerHTML = ''; $('qty').value = 1; st.pick = null; $('addn').disabled = true; $('idet').className = 'muted'; $('idet').textContent = 'Select an item from the list.'; $('ic').focus();
   };
+
+  /* ---- checklist: how much has to be audited, what is done, what is left (counts and item codes only; no non-serialized quantities) ---- */
+  const ckUi = { s: { open: false, f: 'PENDING', q: '' }, n: { open: false, f: 'PENDING', q: '' } };
+  const ckbar = (v, t, col) => `<div class="ckbar"><i style="width:${t ? Math.min(100, 100 * v / t) : 0}%;background:${col}"></i></div>`;
+  let ckT = null; const reloadCk = () => { clearTimeout(ckT); ckT = setTimeout(loadCk, 350); };
+  async function loadCk() {
+    const { data, error } = await sb.rpc('audit_checklist', { p_session: sid });
+    if (error) { st.ck = false; ['ck-ser', 'ck-non'].forEach(i => { const n = $(i); if (n) n.hidden = true; }); paintSide(); return; }  // not installed / unavailable: the audit itself keeps working
+    st.ck = data; paintCk(); paintSide();
+  }
+  function ckShell() {
+    if (st.shell) return; st.shell = true;
+    $('ck-ser').innerHTML = `<div id="ck-s-sum"></div><div id="ck-s-panel" hidden><div class="inp ckq">${ic('search', 16)}<input id="ck-s-q" placeholder="Search item code or description..." autocomplete="off"></div><div id="ck-s-rows"></div></div>`;
+    $('ck-non').innerHTML = `<div id="ck-n-sum"></div><div id="ck-n-panel" hidden><div class="inp ckq">${ic('search', 16)}<input id="ck-n-q" placeholder="Search item code or description..." autocomplete="off"></div><div id="ck-n-rows"></div></div>`;
+  }
+  function paintCk() {
+    const c = st.ck; if (c === false) return; ckShell();
+    if (!c) { $('ck-s-sum').innerHTML = $('ck-n-sum').innerHTML = '<div class="muted">Loading checklist…</div>'; return; }
+    const sr = c.serial, ex = Number(sr.expected), fd = Number(sr.found), nn = c.non, nt = Number(nn.total), nd = Number(nn.done);
+    $('ck-s-sum').innerHTML = `<div class="ckh"><div><b>Serial numbers to scan</b><small>${ex ? 'Expected in your store\'s base stock' : 'No serialized items in your store\'s base stock'}</small></div><div class="ckn"><b>${fn(fd)}</b> of ${fn(ex)} scanned</div></div>${ckbar(fd, ex, '#16A34A')}
+      <div class="cks"><span><b>${fn(Math.max(0, ex - fd))}</b> left to scan${Number(sr.extra) ? ` · <span class="ckx">${fn(sr.extra)} extra (not in base stock)</span>` : ''}</span>${sr.items.length ? `<button type="button" class="ckt" data-ck="s">${ckUi.s.open ? 'Hide' : 'Show'} item-wise list ${ckUi.s.open ? '▴' : '▾'}</button>` : ''}</div>`;
+    $('ck-n-sum').innerHTML = `<div class="ckh"><div><b>Item codes to count</b><small>${nt ? 'Quantities stay blind: only the item codes are listed' : 'No non-serialized items in your store\'s base stock'}</small></div><div class="ckn"><b>${fn(nd)}</b> of ${fn(nt)} item codes done</div></div>${ckbar(nd, nt, '#2F6FED')}
+      <div class="cks"><span><b>${fn(Math.max(0, nt - nd))}</b> left to count${Number(nn.extra) ? ` · <span class="ckx">${fn(nn.extra)} extra (not in base stock)</span>` : ''}</span>${nn.lines.length ? `<button type="button" class="ckt" data-ck="n">${ckUi.n.open ? 'Hide' : 'Show'} item-wise list ${ckUi.n.open ? '▴' : '▾'}</button>` : ''}</div>`;
+    $('ck-s-panel').hidden = !ckUi.s.open; $('ck-n-panel').hidden = !ckUi.n.open; drawRows('s'); drawRows('n');
+  }
+  function paintSide() {
+    const c = st.ck, n = $('ck-side'); if (!n) return;
+    n.innerHTML = c ? `<div class="ckm"><span>Serialized scanned</span><b>${fn(c.serial.found)} of ${fn(c.serial.expected)}</b></div>${ckbar(Number(c.serial.found), Number(c.serial.expected), '#16A34A')}
+      <div class="ckm"><span>Item codes done</span><b>${fn(c.non.done)} of ${fn(c.non.total)}</b></div>${ckbar(Number(c.non.done), Number(c.non.total), '#2F6FED')}` : '';
+  }
+  function drawRows(k) {
+    const u = ckUi[k], c = st.ck, box = $('ck-' + k + '-rows'); if (!c || !u.open || !box) return;
+    const ser = k === 's', list = ser ? c.serial.items : c.non.lines, q = u.q.trim().toUpperCase(), PAGE = 100;
+    const isDone = r => ser ? Number(r.scanned) >= Number(r.expected) : !!r.done;
+    const hit = list.map((r, i) => ({ r, i })).filter(x => !q || [x.r.item_code, x.r.item_description, x.r.inventory_status, x.r.item_quality].join(' ').toUpperCase().includes(q));
+    const nDone = hit.filter(x => isDone(x.r)).length, nPend = hit.length - nDone;
+    const rows = hit.filter(x => u.f === 'ALL' || (u.f === 'DONE') === isDone(x.r))
+      .sort((a, b) => ser ? (Number(b.r.expected) - Number(b.r.scanned)) - (Number(a.r.expected) - Number(a.r.scanned)) || String(a.r.item_code).localeCompare(b.r.item_code) : isDone(a.r) - isDone(b.r) || a.i - b.i);
+    const tabs = [['PENDING', 'Left', nPend], ['DONE', 'Done', nDone], ['ALL', 'All', hit.length]].map(t => `<button type="button" class="tab ${u.f === t[0] ? 'on' : ''}" data-cf="${t[0]}" data-k="${k}">${t[1]} (${fn(t[2])})</button>`).join('');
+    const body = rows.slice(0, PAGE).map(x => { const r = x.r;
+      if (ser) { const sc = Number(r.scanned), ex = Number(r.expected), left = Math.max(0, ex - sc);
+        return `<tr><td><b>${esc(r.item_code)}</b><small>${esc(r.item_description || '')}</small></td><td class="ckc"><b>${fn(sc)}</b> / ${fn(ex)}${ckbar(sc, ex, '#16A34A')}</td><td>${left ? `<span class="ckleft">${fn(left)} left</span>` : badge('Done', 'ok')}</td></tr>`; }
+      return `<tr class="${r.done ? '' : 'pick'}" ${r.done ? '' : `data-pick="${x.i}" title="Tap to count this item"`}><td><b>${esc(r.item_code)}</b> <small class="inl">${esc([r.inventory_status, r.item_quality].filter(Boolean).join(' · '))}</small><small>${esc(r.item_description || '')}${r.item_uom ? ' (' + esc(r.item_uom) + ')' : ''}</small></td><td>${r.done ? badge('Done', 'ok') : badge('Left', 'warn')}</td><td>${r.done ? '' : '<span class="ckgo">Count ›</span>'}</td></tr>`; }).join('');
+    box.innerHTML = `<div class="cktabs">${tabs}</div>` + (body ? `<div class="ckscroll"><table class="ckt2"><thead><tr><th>Item code</th><th>${ser ? 'Scanned' : 'Status'}</th><th>${ser ? 'Left' : ''}</th></tr></thead><tbody>${body}</tbody></table></div>${rows.length > PAGE ? `<div class="muted ckmore">Showing the first ${PAGE} of ${fn(rows.length)}. Use the search box to narrow the list.</div>` : ''}`
+      : `<div class="muted ckmore">${u.f === 'PENDING' ? (q ? 'Nothing left for this search.' : 'Nothing left — all done! 🎉') : 'Nothing to show.'}</div>`);
+  }
+  el.onclick = e => {
+    const t = e.target.closest('[data-ck]'); if (t) { const u = ckUi[t.dataset.ck]; u.open = !u.open; return paintCk(); }
+    const f = e.target.closest('[data-cf]'); if (f) { ckUi[f.dataset.k].f = f.dataset.cf; return drawRows(f.dataset.k); }
+    const r = e.target.closest('[data-pick]'); if (r && st.ck) { const o = st.ck.non.lines[+r.dataset.pick]; if (!o) return;
+      choose({ item_code: o.item_code, inventory_status: o.inventory_status, item_quality: o.item_quality, item_description: o.item_description, item_uom: o.item_uom });
+      $('opts').innerHTML = ''; $('ic').value = ''; $('idet').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); $('qty').focus(); $('qty').select(); }
+  };
+  el.oninput = e => { if (e.target.id === 'ck-s-q') { ckUi.s.q = e.target.value; drawRows('s'); } else if (e.target.id === 'ck-n-q') { ckUi.n.q = e.target.value; drawRows('n'); } };
+  loadCk();
   paint(); scan.focus(); Q.pump();
 }
 
