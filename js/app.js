@@ -2,16 +2,16 @@
 const ROLE_LABEL = { ADMIN: 'Administrator', CIRCLE_HEAD: 'Circle Head', STORE_USER: 'Store User' };
 const NAV_STORE = [['dashboard', 'Dashboard', 'home'], ['audit', 'Start Audit', 'play'], ['result', 'My Result', 'clip'], ['profile', 'My Profile', 'user']];
 const NAV_STAFF = [{ k: 'dashboard', t: 'Dashboard', i: 'home' },
-  { g: 'reports', t: 'Reports', i: 'file', kids: [['reports', 'Reports'], ['logs', 'Audit Logs']] },
   { g: 'mgmt', t: 'Management', i: 'grid', kids: [['stores', 'Stores'], ['users', 'Users']] },
   { g: 'ops', t: 'Operations', i: 'scan', kids: [['storeaudit', 'Store Audit'], ['basestock', 'Base Stock']] },
+  { g: 'reports', t: 'Reports', i: 'file', kids: [['reports', 'Reports'], ['logs', 'Audit Logs']] },
   { k: 'profile', t: 'My Account', i: 'user' }];
 const FLY = {   // sub-menus open in a flyout beside the sidebar (title, description, icon)
   reports: [['reports', 'Reports', 'Download audit reports and Excel exports', 'file'], ['logs', 'Audit Logs', 'Track activities and changes in the system', 'clip']],
   mgmt: [['stores', 'Stores', 'Manage stores, circles and store types', 'store'], ['users', 'Users', 'Approve users, roles and store assignments', 'users']],
   ops: [['storeaudit', 'Store Audit', 'Monitor store-wise progress and drill down', 'scan'], ['basestock', 'Base Stock', "Upload and freeze each store's base stock", 'box']] };
 const GROUP_OF = { reports: 'reports', logs: 'reports', stores: 'mgmt', users: 'mgmt', storeaudit: 'ops', basestock: 'ops', storedetail: 'ops', result: 'ops' };
-const HEAD = { dashboard: ['Dashboard', 'Complete overview of store audits, stock status and key metrics.'], reports: ['Reports', 'Download audit reports, analytics and export data.'], logs: ['Audit Logs', 'Track all activities and changes in the system.'],
+const HEAD = { dashboard: ['Dashboard', ''], reports: ['Reports', 'Download audit reports, analytics and export data.'], logs: ['Audit Logs', 'Track all activities and changes in the system.'],
   stores: ['Stores', 'Manage all stores across circles.'], users: ['Users', 'Manage application users, roles and store assignments.'], storeaudit: ['Store Audit', 'Monitor store-wise audit progress, view variances and drill down to detailed records.'],
   basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'] };
 

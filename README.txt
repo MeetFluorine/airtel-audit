@@ -11,3 +11,9 @@ BANNER: assets/banner.jpg (your supplied image). Replace that one file to change
 1) Run database/12_audit_checklist.sql once in the Supabase SQL editor (safe to re-run).
 2) Upload the files as usual. Changed: js/audit.js, css/audit-checklist.css (new), index.html (1 link).
 Until step 1 is done the audit page works exactly as before; the checklist just stays hidden.
+
+
+---- Dashboard: click-to-filter, menu order ----
+1) Run database/13_dashboard_filter.sql once in the Supabase SQL editor (safe to re-run). It lets the two trend charts follow the selected circle head / circle.
+   Without it the dashboard still filters; only the trend charts keep showing all circles (a small note says so).
+2) Changed: js/dashboard.js, js/app.js (menu order + Dashboard subtitle), css/admin-dashboard.css.

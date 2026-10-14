@@ -26,7 +26,7 @@ function trendSvg(tr) {
   let g = ''; for (let k = 0; k <= 4; k++) { const yy = T + ph * k / 4; g += `<line x1="${L}" x2="${W - Rr}" y1="${yy}" y2="${yy}" stroke="#EEF3F1"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end" font-size="10" fill="#6B7B75">${Math.round(stores * (1 - k / 4))}</text><text x="${W - Rr + 6}" y="${yy + 4}" font-size="10" fill="#6B7B75">${100 - k * 25}%</text>`; }
   const bars = tr.map((r, i) => { const c = Number(r.completed), p = Number(r.in_progress), ns = Math.max(0, Number(r.stores) - c - p); let yy = y(0), out = '';
     [[c, '#16A34A'], [p, '#2563EB'], [ns, '#F5B301']].forEach(([v, col]) => { const h = ph * v / stores; yy -= h; if (v > 0) out += `<rect x="${x(i) - bw / 2}" y="${yy}" width="${bw}" height="${h}" fill="${col}" opacity=".9" rx="2"/>`; });
-    return out + `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="10" fill="#6B7B75">${esc(String(r.name).slice(0, 9))}</text>`; }).join('');
+    return `<g><title>${esc(r.name)}: ${c} completed, ${p} in progress, ${ns} not started</title>${out}</g>` + `<text x="${x(i)}" y="${H - 10}" text-anchor="middle" font-size="10" fill="#6B7B75">${esc(String(r.name).slice(0, 9))}</text>`; }).join('');
   const pts = tr.map((r, i) => Number(r.expected) > 0 ? [x(i), yp(100 * Number(r.matched) / Number(r.expected))] : null).filter(Boolean);
   const line = pts.length ? `<polyline points="${pts.map(p => p.join(',')).join(' ')}" fill="none" stroke="#F5B301" stroke-width="2.4"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3.6" fill="#fff" stroke="#F5B301" stroke-width="2"/>`).join('')}` : '';
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Audit trend">${g}${bars}${line}</svg>`;
@@ -63,7 +63,7 @@ function adAuditTrend(tr) {
   let g = ''; for (let k = 0; k <= 4; k++) { const yy = T + ph * k / 4; g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="#EDF1F0"/><text x="${L - 8}" y="${yy + 4}" text-anchor="end" font-size="11" fill="#6B7B75">${Math.round(stores * (1 - k / 4))}</text><text x="${W - R + 8}" y="${yy + 4}" font-size="11" fill="#6B7B75">${100 - k * 25}%</text>`; }
   const bars = tr.map((r, i) => { const c = Number(r.completed), p = Number(r.in_progress), ns = Math.max(0, Number(r.stores) - c - p); let yy = y(0), out = '';
     [[c, '#16A34A'], [p, '#2F6FED'], [ns, '#F8B814']].forEach(([v, col]) => { const h = ph * v / stores; yy -= h; if (v > 0) out += `<rect x="${x(i) - bw / 2}" y="${yy}" width="${bw}" height="${h}" fill="${col}"/>`; });
-    return out + `<text x="${x(i)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#44564F">${esc(String(r.name).slice(0, 10))}</text>`; }).join('');
+    return `<g><title>${esc(r.name)}: ${c} completed, ${p} in progress, ${ns} not started</title>${out}</g>` + `<text x="${x(i)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="#44564F">${esc(String(r.name).slice(0, 10))}</text>`; }).join('');
   const pts = tr.map((r, i) => [x(i), yp(Number(r.expected) > 0 ? 100 * Number(r.matched) / Number(r.expected) : 0), Number(r.expected) > 0 ? 100 * Number(r.matched) / Number(r.expected) : 0, r.name]);
   const line = pts.length ? `<polyline points="${pts.map(p => p[0] + ',' + p[1]).join(' ')}" fill="none" stroke="#F4511E" stroke-width="2"/>${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="#fff" stroke="#F4511E" stroke-width="2"><title>${esc(p[3])}: ${p[2].toFixed(1)}% match</title></circle>`).join('')}` : '';
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Audit trend">${g}${bars}${line}</svg>`;
@@ -82,85 +82,126 @@ if (!window.__adHashWired) { window.__adHashWired = true; window.addEventListene
 
 async function adminDash(el) {
   if (!S.cycleId) { adRemoveSearch(); return noCycle(el); }
-  const cid = S.cycleId, AD = { metric: 'short', range: 6 }, num = v => Number(v) || 0, share = (v, tot) => tot ? 100 * v / tot : 0;
-  const [o, s, t] = await Promise.all([sb.rpc('dash_overview', { p_cycle: cid }), sb.rpc('dash_stores', { p_cycle: cid }), sb.rpc('dash_trend', { p_cycle: cid, p_limit: 6 })]);
-  if (o.error) throw o.error; if (s.error) throw s.error; if (t.error) throw t.error;
-  const T = o.data.totals, rows = s.data, trend = t.data, prev = trend.length > 1 ? trend[trend.length - 2] : null, pS = prev ? num(prev.stores) : 0;
-  const circleOf = Object.fromEntries(rows.map(r => [r.store_id, r.circle]));
+  const cid = S.cycleId, AD = { metric: 'short', range: 6, f: null, trend: [], kpiTrend: [], note: false }, num = v => Number(v) || 0, share = (v, tot) => tot ? 100 * v / tot : 0;
+  const [o, s] = await Promise.all([sb.rpc('dash_overview', { p_cycle: cid }), sb.rpc('dash_stores', { p_cycle: cid })]);
+  if (o.error) throw o.error; if (s.error) throw s.error;
+  const rowsAll = s.data, circleOf = Object.fromEntries(rowsAll.map(r => [r.store_id, r.circle]));
+  const heads = [...o.data.heads].sort((a, b) => num(b.stores) - num(a.stores) || String(a.label).localeCompare(b.label)).slice(0, 5);
 
-  /* ---- KPI cards ---- */
-  const cur = { c: share(num(T.completed), num(T.stores)), p: share(num(T.in_progress), num(T.stores)), n: share(num(T.not_started), num(T.stores)) };
-  const old = prev ? { c: share(num(prev.completed), pS), p: share(num(prev.in_progress), pS), n: share(Math.max(0, pS - num(prev.completed) - num(prev.in_progress)), pS) } : { c: 0, p: 0, n: 100 };
+  /* ---- trend data (all circles, or only the selected circles when filtered; cached) ---- */
+  const cache = {};
+  async function getTrend(n, circles) {
+    const key = n + '|' + (circles ? circles.join('~') : '*'); if (cache[key]) return cache[key];
+    let r = circles ? await sb.rpc('dash_trend_circles', { p_cycle: cid, p_limit: n, p_circles: circles }) : await sb.rpc('dash_trend', { p_cycle: cid, p_limit: n });
+    if (r.error && circles) { AD.note = true; return getTrend(n, null); }      // filter function not installed yet: show the all-circle trend
+    if (r.error) throw r.error;
+    return cache[key] = r.data;
+  }
+  async function loadTrends() { const c = AD.f ? AD.f.circles : null; AD.note = false; [AD.kpiTrend, AD.trend] = await Promise.all([getTrend(6, c), getTrend(AD.range, c)]); }
+  await loadTrends();
+
   const r1 = v => Math.round(v * 10) / 10, p1 = v => r1(v).toFixed(1);
-  const dBadge = (d, total) => { const r = r1(d); return r > 0 ? `<span class="bdg up">↑ ${total ? '' : '+'}${r}%</span>` : r < 0 ? `<span class="bdg dn">↓ ${r}%</span>` : total ? '<span class="bdg up">↑ 0%</span>' : '<span class="bdg fl">− 0%</span>'; };
-  const series = k => trend.map(x => k === 's' ? num(x.stores) : k === 'c' ? num(x.completed) : k === 'p' ? num(x.in_progress) : Math.max(0, num(x.stores) - num(x.completed) - num(x.in_progress)));
-  const kc = (cls, tileStyle, icon, label, val, pctTxt, pctCol, sub, badge, k, col) => `<div class="dsh-k ${cls}"><span class="ico" style="${tileStyle}">${ic(icon, 24, 2)}</span><div><div class="lb">${label}</div><div class="nm"><b>${val}</b>${pctTxt ? `<span style="color:${pctCol}">${pctTxt}</span>` : ''}</div><div class="sb2">${sub}</div></div>${badge}${adSpark(series(k), col, 'dshg-' + k)}</div>`;
-  const kpis = kc('blue', 'background:#DCE8FF;color:#2F6FED', 'store', 'Total Stores', T.stores, '', '', 'Across all circles', dBadge(pS ? 100 * (num(T.stores) - pS) / pS : 0, true), 's', '#2F6FED')
-    + kc('green', 'background:#16A34A;color:#fff', 'check', 'Completed', T.completed, p1(cur.c) + '%', '#16A34A', `${T.completed} / ${T.stores} stores`, dBadge(cur.c - old.c), 'c', '#16A34A')
-    + kc('blue', 'background:#DCE8FF;color:#2F6FED', 'sync', 'In Progress', T.in_progress, p1(cur.p) + '%', '#2F6FED', `${T.in_progress} / ${T.stores} stores`, dBadge(cur.p - old.p), 'p', '#2F6FED')
-    + kc('amber', 'background:#FFE7B0;color:#F59E0B', 'alert', 'Not Started', T.not_started, p1(cur.n) + '%', '#F59E0B', `${T.not_started} / ${T.stores} stores`, dBadge(cur.n - old.n), 'n', '#F8B814');
-
-  /* ---- circle head summary ---- */
   const pal = [['#E8EAED', '#44525F'], ['#EAE5FF', '#5B3FD9'], ['#FCE3E3', '#C42B2B'], ['#DDEBFF', '#1D5FD8'], ['#FFEFC2', '#B7791F']];
   const init = n => { const w = String(n || '?').replace(/[^A-Za-z\s]/g, ' ').trim().split(/\s+/).filter(Boolean); return ((w[0] || '?')[0] + (w.length > 1 ? w[w.length - 1][0] : '')).toUpperCase(); };
-  const heads = [...o.data.heads].sort((a, b) => num(b.stores) - num(a.stores) || String(a.label).localeCompare(b.label)).slice(0, 5);
-  const headCards = heads.map((h, i) => { const st = num(h.stores), done = num(h.completed), pend = st - done, pc = v => st ? Math.round(100 * v / st) : 0, un = String(h.key).startsWith('circle:'), cs = h.circles || [], pl = pal[i % pal.length];
-    return `<div class="dsh-h"><div class="hd"><span class="av" style="background:${pl[0]};color:${pl[1]}">${esc(init(h.label))}</span><div class="nm"><b title="${esc(h.label)}">${esc(h.label)}</b><div class="sl"><small>${un ? 'No head' : 'Circle Head'}</small><span class="cnt">${cs.length} Circle${cs.length === 1 ? '' : 's'}</span></div></div></div>
-      <div class="chips">${cs.slice(0, 4).map(c => `<span title="${esc(c)}">${esc(c)}</span>`).join('')}${cs.length > 4 ? `<span>+${cs.length - 4}</span>` : ''}</div>
-      <div class="st"><div><small>Total Stores</small><b>${st}</b></div><div><small>Completed</small><b class="g">${done} (${pc(done)}%)</b></div><div><small>Pending</small><b class="r">${pend} (${pc(pend)}%)</b></div></div></div>`; }).join('');
-
-  /* ---- circles by shortage ---- */
-  const cmap = {}; rows.forEach(r => { const c = cmap[r.circle] = cmap[r.circle] || { name: r.circle, stores: 0, done: 0, short: 0, excess: 0 }; c.stores++; if (r.audit_status === 'COMPLETED') { c.done++; c.short += num(r.short); c.excess += num(r.excess); } });
-  const circles = Object.values(cmap), METRIC = { short: ['short', '#F0383B'], excess: ['excess', '#F59E0B'], pending: ['pending', '#2F6FED'] };
-  const topBars = () => { const [k, col] = METRIC[AD.metric], val = c => k === 'pending' ? c.stores - c.done : c[k], list = [...circles].sort((a, b) => val(b) - val(a) || b.stores - a.stores || String(a.name).localeCompare(b.name)).slice(0, 5), mx = Math.max(1, ...list.map(val));
-    return list.length ? list.map(c => `<div class="dsh-bar"><span class="nm" title="${esc(c.name)}">${esc(c.name)}</span><div class="tr"><i style="width:${val(c) ? Math.max(2, 100 * val(c) / mx) : 0}%;background:${col}"></i></div><b class="vl" style="color:${col}">${fn(val(c))}</b></div>`).join('') : '<div class="dsh-empty">No circles to show.</div>'; };
-
-  /* ---- stock condition ---- */
-  const done = rows.filter(r => r.audit_status === 'COMPLETED'), sum = k => done.reduce((a, r) => a + num(r[k]), 0);
-  const avail = sum('matched'), shortU = sum('short'), excessU = sum('excess'), others = Math.max(0, sum('expected') - avail - shortU), stockTot = avail + shortU + excessU + others;
-  const stock = [['Available', avail, '#16A34A'], ['Short', shortU, '#F0383B'], ['Excess', excessU, '#F8B814'], ['Others', others, '#7D8A99']];
-
-  /* ---- tables ---- */
-  const crit = rows.filter(r => r.audit_status === 'COMPLETED' && r.match_rate != null && r.match_rate < 75).sort((a, b) => a.match_rate - b.match_rate || num(b.short) - num(a.short)).slice(0, 5);
-  const critRows = crit.length ? crit.map(r => `<tr><td><a class="sn" href="#/storedetail?s=${r.store_id}" title="${esc(r.code)}">${esc(r.name)}</a></td><td>${esc(r.circle)}</td><td class="neg">${pct(r.match_rate)}</td><td class="neg">${fn(r.short)}</td><td>${fn(r.excess)}</td><td><span class="pill bad">CRITICAL</span></td></tr>`).join('') : '<tr><td colspan="6" class="none">No critical stores in this cycle.</td></tr>';
+  const METRIC = { short: ['Shortage Units', '#F0383B'], excess: ['Excess Units', '#F59E0B'], pending: ['Pending Stores', '#2F6FED'] };
   const AP = { AUDIT_SUBMITTED: 'ok', AUDIT_STARTED: 'bl', BASE_FROZEN: 'yl', AUDIT_REOPENED: 'rd' };
-  const actRows = o.data.activity.slice(0, 5).map(a => `<tr><td><a class="sn" href="#/storedetail?s=${a.store_id}">${esc(a.store_code || '—')}</a></td><td>${esc(circleOf[a.store_id] || '-')}</td><td><span class="ap ${AP[a.event_type] || 'gr'}">${EVT[a.event_type] || esc(a.event_type)}</span></td><td class="tm">${ago(a.created_at)}</td></tr>`).join('') || '<tr><td colspan="4" class="none">No activity yet.</td></tr>';
+  const tile = i => `<span class="hic">${ic(i, 26, 1.8)}</span>`;
+  const sc = () => el.closest('.page2');
 
-  /* ---- trend pieces ---- */
-  let tr = trend;
-  const trendBox = () => adAuditTrend(tr), rateBox = () => adRateTrend(tr);
-  const now = new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\b(am|pm)\b/, m => m.toUpperCase());
-  const tile = (i) => `<span class="hic">${ic(i, 26, 1.8)}</span>`;
+  function render() {
+    const set = AD.f ? new Set(AD.f.circles) : null, rows = set ? rowsAll.filter(r => set.has(r.circle)) : rowsAll, done = rows.filter(r => r.audit_status === 'COMPLETED');
+    const sum = k => done.reduce((a, r) => a + num(r[k]), 0);
+    const T = { stores: rows.length, completed: done.length, in_progress: rows.filter(r => r.audit_status === 'IN_PROGRESS').length, expected: sum('expected'), matched: sum('matched'), short: sum('short'), excess: sum('excess') };
+    T.not_started = T.stores - T.completed - T.in_progress; T.match_rate = T.expected > 0 ? 100 * T.matched / T.expected : null;
+    const trend = AD.kpiTrend, prev = trend.length > 1 ? trend[trend.length - 2] : null, pS = prev ? num(prev.stores) : 0;
 
-  el.innerHTML = `<div class="dsh">
-    <div class="dsh-upd"><span>Last Updated : ${esc(now)}</span><button id="dsh-ref" type="button">${ic('sync', 15, 2)} Refresh</button></div>
+    /* KPI cards */
+    const cur = { c: share(T.completed, T.stores), p: share(T.in_progress, T.stores), n: share(T.not_started, T.stores) };
+    const old = prev ? { c: share(num(prev.completed), pS), p: share(num(prev.in_progress), pS), n: share(Math.max(0, pS - num(prev.completed) - num(prev.in_progress)), pS) } : { c: 0, p: 0, n: 100 };
+    const dBadge = (d, total) => { const r = r1(d); return r > 0 ? `<span class="bdg up">↑ ${total ? '' : '+'}${r}%</span>` : r < 0 ? `<span class="bdg dn">↓ ${r}%</span>` : total ? '<span class="bdg up">↑ 0%</span>' : '<span class="bdg fl">− 0%</span>'; };
+    const series = k => trend.map(x => k === 's' ? num(x.stores) : k === 'c' ? num(x.completed) : k === 'p' ? num(x.in_progress) : Math.max(0, num(x.stores) - num(x.completed) - num(x.in_progress)));
+    const kc = (cls, tileStyle, icon, label, val, pctTxt, pctCol, sub, badge, k, col, tab) => `<div class="dsh-k ${cls}" role="button" tabindex="0" data-kpi="${tab}" title="View ${label === 'Total Stores' ? 'all' : label.toLowerCase()} stores"><span class="ico" style="${tileStyle}">${ic(icon, 24, 2)}</span><div><div class="lb">${label}</div><div class="nm"><b>${fn(val)}</b>${pctTxt ? `<span style="color:${pctCol}">${pctTxt}</span>` : ''}</div>${sub ? `<div class="sb2">${sub}</div>` : ''}</div>${badge}${adSpark(series(k), col, 'dshg-' + k)}</div>`;
+    const kpis = kc('blue', 'background:#DCE8FF;color:#2F6FED', 'store', 'Total Stores', T.stores, '', '', '', dBadge(pS ? 100 * (T.stores - pS) / pS : 0, true), 's', '#2F6FED', 'ALL')
+      + kc('green', 'background:#16A34A;color:#fff', 'check', 'Completed', T.completed, p1(cur.c) + '%', '#16A34A', `${fn(T.completed)} / ${fn(T.stores)} stores`, dBadge(cur.c - old.c), 'c', '#16A34A', 'COMPLETED')
+      + kc('blue', 'background:#DCE8FF;color:#2F6FED', 'sync', 'In Progress', T.in_progress, p1(cur.p) + '%', '#2F6FED', `${fn(T.in_progress)} / ${fn(T.stores)} stores`, dBadge(cur.p - old.p), 'p', '#2F6FED', 'IN_PROGRESS')
+      + kc('amber', 'background:#FFE7B0;color:#F59E0B', 'alert', 'Not Started', T.not_started, p1(cur.n) + '%', '#F59E0B', `${fn(T.not_started)} / ${fn(T.stores)} stores`, dBadge(cur.n - old.n), 'n', '#F8B814', 'NOT_STARTED');
+
+    /* circle heads (always all heads, the selected one is highlighted) */
+    const headCards = heads.map((h, i) => { const st = num(h.stores), dn = num(h.completed), pend = st - dn, pc = v => st ? Math.round(100 * v / st) : 0, cs = h.circles || [], pl = pal[i % pal.length], on = AD.f && AD.f.type === 'head' && AD.f.key === h.key;
+      return `<div class="dsh-h ${on ? 'sel' : ''}" role="button" tabindex="0" data-head="${i}" aria-pressed="${on}" title="${on ? 'Click to clear the filter' : 'Show the dashboard for ' + esc(h.label)}"><div class="hd"><span class="av" style="background:${pl[0]};color:${pl[1]}">${esc(init(h.label))}</span><div class="nm"><b title="${esc(h.label)}">${esc(h.label)}</b></div></div>
+        <div class="chips">${cs.slice(0, 4).map(c => `<span title="${esc(c)}">${esc(c)}</span>`).join('')}${cs.length > 4 ? `<span>+${cs.length - 4}</span>` : ''}</div>
+        <div class="st"><div><small>Total Stores</small><b>${st}</b></div><div><small>Completed</small><b class="g">${dn} (${pc(dn)}%)</b></div><div><small>Pending</small><b class="r">${pend} (${pc(pend)}%)</b></div></div></div>`; }).join('');
+
+    /* top circles */
+    const cmap = {}; rows.forEach(r => { const c = cmap[r.circle] = cmap[r.circle] || { name: r.circle, stores: 0, done: 0, short: 0, excess: 0 }; c.stores++; if (r.audit_status === 'COMPLETED') { c.done++; c.short += num(r.short); c.excess += num(r.excess); } });
+    const [mLabel, mCol] = METRIC[AD.metric], val = c => AD.metric === 'pending' ? c.stores - c.done : c[AD.metric];
+    const top = Object.values(cmap).sort((a, b) => val(b) - val(a) || b.stores - a.stores || String(a.name).localeCompare(b.name)).slice(0, 5), mx = Math.max(1, ...top.map(val));
+    const bars = top.length ? top.map(c => `<div class="dsh-bar" role="button" tabindex="0" data-circ="${esc(c.name)}" title="Show only ${esc(c.name)}"><span class="nm">${esc(c.name)}</span><div class="tr"><i style="width:${val(c) ? Math.max(2, 100 * val(c) / mx) : 0}%;background:${mCol}"></i></div><b class="vl" style="color:${mCol}">${fn(val(c))}</b></div>`).join('') : '<div class="dsh-empty">No circles to show.</div>';
+
+    /* stock condition */
+    const others = Math.max(0, T.expected - T.matched - T.short), stockTot = T.matched + T.short + T.excess + others;
+    const stock = [['Available', T.matched, '#16A34A', ''], ['Short', T.short, '#F0383B', 'short'], ['Excess', T.excess, '#F8B814', 'excess'], ['Others', others, '#7D8A99', '']];
+
+    /* tables */
+    const crit = done.filter(r => r.match_rate != null && r.match_rate < 75).sort((a, b) => a.match_rate - b.match_rate || num(b.short) - num(a.short)).slice(0, 5);
+    const critRows = crit.length ? crit.map(r => `<tr class="go" data-go="#/storedetail?s=${r.store_id}" title="${esc(r.code)}"><td><a class="sn" href="#/storedetail?s=${r.store_id}">${esc(r.name)}</a></td><td>${esc(r.circle)}</td><td class="neg">${pct(r.match_rate)}</td><td class="neg">${fn(r.short)}</td><td>${fn(r.excess)}</td><td><span class="pill bad">CRITICAL</span></td></tr>`).join('') : '<tr><td colspan="6" class="none">No critical stores.</td></tr>';
+    const act = o.data.activity.filter(a => !set || set.has(circleOf[a.store_id])).slice(0, 5);
+    const actRows = act.map(a => `<tr class="go" data-go="#/storedetail?s=${a.store_id}"><td><a class="sn" href="#/storedetail?s=${a.store_id}">${esc(a.store_code || '—')}</a></td><td>${esc(circleOf[a.store_id] || '-')}</td><td><span class="ap ${AP[a.event_type] || 'gr'}">${EVT[a.event_type] || esc(a.event_type)}</span></td><td class="tm">${ago(a.created_at)}</td></tr>`).join('') || '<tr><td colspan="4" class="none">No activity yet.</td></tr>';
+
+    const now = new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).replace(/\b(am|pm)\b/, m => m.toUpperCase());
+    const chip = AD.f ? `<div class="dsh-fchip"><span>Showing</span><b title="${esc(AD.f.label)}">${esc(AD.f.label)}</b><i>${fn(T.stores)} store${T.stores === 1 ? '' : 's'}</i><button type="button" data-clear aria-label="Clear filter">✕ Clear</button></div>` : '<span></span>';
+    const y = sc() ? sc().scrollTop : 0;
+    el.innerHTML = `<div class="dsh">
+    <div class="dsh-upd">${chip}<div class="r"><span>Last Updated : ${esc(now)}</span><button id="dsh-ref" type="button">${ic('sync', 15, 2)} Refresh</button></div></div>
     <div class="dsh-kpis">${kpis}</div>
-    <section class="dsh-card"><div class="dsh-head">${tile('user')}<div class="ht"><b>Circle Head Summary</b><small>Circle-wise allocation and performance in current audit cycle (${esc(S.cycleName)})</small></div><div class="hr"><a class="dsh-btn" href="#/users">View All Circle Heads ${ic('arrow', 15, 2)}</a></div></div>
+    <section class="dsh-card"><div class="dsh-head">${tile('user')}<div class="ht"><b>Circle Head Summary</b><small>Select a circle head to filter the dashboard</small></div><div class="hr"><a class="dsh-btn" href="#/users">View All Circle Heads ${ic('arrow', 15, 2)}</a></div></div>
       ${headCards ? `<div class="dsh-heads">${headCards}</div>` : '<div class="dsh-empty">No circle heads or circles to show.</div>'}</section>
     <div class="dsh-r2">
-      <section class="dsh-card"><div class="dsh-head">${tile('users')}<div class="ht"><b>Top 5 Circles by <span id="dsh-mt">Shortage Units</span></b></div><div class="hr"><select id="dsh-metric" aria-label="Rank circles by"><option value="short">By Shortage Units</option><option value="excess">By Excess Units</option><option value="pending">By Pending Stores</option></select></div></div><div class="dsh-bars" id="dsh-bars">${topBars()}</div></section>
-      <section class="dsh-card"><div class="dsh-head">${tile('box')}<div class="ht"><b>Stock Condition <em>(All Stores)</em></b></div></div>
-        <div class="dsh-stock">${adDonut(stock.map(x => ({ v: x[1], color: x[2] })), stockTot)}<div class="dsh-leg">${stock.map(x => `<div><i style="background:${x[2]}"></i><span>${x[0]}</span><b>${fn(x[1])}</b><span class="p">${stockTot ? (100 * x[1] / stockTot).toFixed(1) : '0.0'}%</span></div>`).join('')}</div></div></section>
+      <section class="dsh-card"><div class="dsh-head">${tile('users')}<div class="ht"><b>Top 5 Circles</b></div><div class="hr"><select id="dsh-metric" aria-label="Rank circles by">${Object.entries(METRIC).map(([k, v]) => `<option value="${k}" ${k === AD.metric ? 'selected' : ''}>By ${v[0]}</option>`).join('')}</select></div></div><div class="dsh-bars">${bars}</div></section>
+      <section class="dsh-card"><div class="dsh-head">${tile('box')}<div class="ht"><b>Stock Condition</b></div></div>
+        <div class="dsh-stock">${adDonut(stock.map(x => ({ v: x[1], color: x[2] })), stockTot)}<div class="dsh-leg">${stock.map(x => `<div ${x[3] ? `class="lk" role="button" tabindex="0" data-legend="${x[3]}" title="Rank circles by ${x[0].toLowerCase()} units"` : ''}><i style="background:${x[2]}"></i><span>${x[0]}</span><b>${fn(x[1])}</b><span class="p">${stockTot ? (100 * x[1] / stockTot).toFixed(1) : '0.0'}%</span></div>`).join('')}</div></div></section>
     </div>
     <div class="dsh-r3">
-      <section class="dsh-card"><div class="dsh-head">${tile('bars')}<div class="ht"><b>Audit Trend <em>(Last <span id="dsh-n1">6</span> Cycles)</em></b></div><div class="hr"><select id="dsh-range" aria-label="Number of cycles"><option value="3">Last 3 Cycles</option><option value="6" selected>Last 6 Cycles</option><option value="12">Last 12 Cycles</option></select></div></div>
-        <div class="dsh-lgd"><span><i style="background:#16A34A"></i>Completed</span><span><i style="background:#2F6FED"></i>In Progress</span><span><i style="background:#F8B814"></i>Not Started</span><span><i class="ln"></i>&nbsp;&nbsp;Match Rate %</span></div><div class="dsh-chart" id="dsh-trend">${trendBox()}</div></section>
-      <section class="dsh-card"><div class="dsh-head"><span class="hic" style="color:#E5484D">${ic('rate', 26, 1.8)}</span><div class="ht"><b>Match Rate Trend</b></div><div class="hr"><div class="dsh-ovr"><span class="t">${ic('target', 18, 2)}</span><div><small>Overall Match Rate</small><b>${pct(T.match_rate)}</b></div></div></div></div><div class="dsh-chart" id="dsh-rate">${rateBox()}</div></section>
+      <section class="dsh-card"><div class="dsh-head">${tile('bars')}<div class="ht"><b>Audit Trend</b>${AD.note ? '<small class="warn">Trend shows all circles (run database/13_dashboard_filter.sql to filter it)</small>' : ''}</div><div class="hr"><select id="dsh-range" aria-label="Number of cycles">${[3, 6, 12].map(n => `<option value="${n}" ${n === AD.range ? 'selected' : ''}>Last ${n} Cycles</option>`).join('')}</select></div></div>
+        <div class="dsh-lgd"><span><i style="background:#16A34A"></i>Completed</span><span><i style="background:#2F6FED"></i>In Progress</span><span><i style="background:#F8B814"></i>Not Started</span><span><i class="ln"></i>&nbsp;&nbsp;Match Rate %</span></div><div class="dsh-chart">${adAuditTrend(AD.trend)}</div></section>
+      <section class="dsh-card"><div class="dsh-head"><span class="hic" style="color:#E5484D">${ic('rate', 26, 1.8)}</span><div class="ht"><b>Match Rate Trend</b></div><div class="hr"><div class="dsh-ovr"><span class="t">${ic('target', 18, 2)}</span><div><small>Overall Match Rate</small><b>${T.match_rate == null ? '—' : pct(T.match_rate)}</b></div></div></div></div><div class="dsh-chart">${adRateTrend(AD.trend)}</div></section>
     </div>
     <div class="dsh-r4">
-      <section class="dsh-card"><div class="dsh-head"><span class="hic" style="color:#E5484D">${ic('warnc', 26, 1.8)}</span><div class="ht"><b>Critical Stores</b></div><div class="hr"><a class="dsh-vall bl" href="#/storeaudit">View All ${ic('arrow', 14, 2)}</a></div></div>
+      <section class="dsh-card"><div class="dsh-head"><span class="hic" style="color:#E5484D">${ic('warnc', 26, 1.8)}</span><div class="ht"><b>Critical Stores</b></div><div class="hr"><a class="dsh-vall bl" href="#/storeaudit" data-crit>View All ${ic('arrow', 14, 2)}</a></div></div>
         <div class="dsh-tw"><table class="dsh-t"><thead><tr><th>Store Name</th><th>Circle</th><th>Match Rate</th><th>Short Units</th><th>Excess Units</th><th>Status</th></tr></thead><tbody>${critRows}</tbody></table></div></section>
       <section class="dsh-card"><div class="dsh-head"><span class="hic" style="color:#E5484D">${ic('clock', 26, 1.8)}</span><div class="ht"><b>Recently Updated Stores</b></div><div class="hr"><a class="dsh-vall" href="#/logs">View All ${ic('arrow', 14, 2)}</a></div></div>
         <div class="dsh-tw"><table class="dsh-t"><thead><tr><th>Store Name</th><th>Circle</th><th>Action</th><th>Time</th></tr></thead><tbody>${actRows}</tbody></table></div></section>
     </div></div>`;
+    if (sc()) sc().scrollTop = y;
+    AD.shown = { rows, set };
+  }
 
-  /* ---- interactions ---- */
-  el.onchange = async e => {
-    if (e.target.id === 'dsh-metric') { AD.metric = e.target.value; el.querySelector('#dsh-bars').innerHTML = topBars(); el.querySelector('#dsh-mt').textContent = { short: 'Shortage Units', excess: 'Excess Units', pending: 'Pending Stores' }[AD.metric]; }
-    if (e.target.id === 'dsh-range') { const n = Number(e.target.value), r = await sb.rpc('dash_trend', { p_cycle: cid, p_limit: n }); if (r.error) { toast(rpcMsg(r.error), 'err'); return; }
-      tr = r.data; AD.range = n; el.querySelector('#dsh-trend').innerHTML = trendBox(); el.querySelector('#dsh-rate').innerHTML = rateBox(); el.querySelector('#dsh-n1').textContent = n; }
+  /* ---- filter + interactions ---- */
+  async function setFilter(f) {
+    el.classList.add('dsh-busy'); AD.f = f;
+    try { await loadTrends(); } catch (e) { toast(rpcMsg(e), 'err'); }
+    render(); el.classList.remove('dsh-busy');
+  }
+  const same = (a, b) => a && b && a.type === b.type && a.key === b.key;
+  const go = (tab) => { const set = AD.f && AD.f.circles.length === 1 ? AD.f.circles[0] : ''; window.__auditPreset = { tab, circle: set }; location.hash = '#/storeaudit'; };
+  el.onclick = e => {
+    const t = e.target;
+    if (t.closest('#dsh-ref')) { t.closest('#dsh-ref').classList.add('spin'); PAGES.dashboard(el).catch(x => { el.innerHTML = '<div class="alert err">Could not load this page. ' + esc(friendlyError(x)) + '</div>'; }); return; }
+    if (t.closest('[data-clear]')) return setFilter(null);
+    if (t.closest('[data-crit]')) { window.__auditPreset = { tab: 'CRIT', circle: AD.f && AD.f.circles.length === 1 ? AD.f.circles[0] : '' }; return; }
+    if (t.closest('a')) return;
+    const h = t.closest('[data-head]'); if (h) { const hd = heads[+h.dataset.head], f = { type: 'head', key: hd.key, label: hd.label, circles: hd.circles || [] }; return setFilter(same(AD.f, f) ? null : f); }
+    const c = t.closest('[data-circ]'); if (c) { const f = { type: 'circle', key: c.dataset.circ, label: c.dataset.circ + ' circle', circles: [c.dataset.circ] }; return setFilter(same(AD.f, f) ? null : f); }
+    const k = t.closest('[data-kpi]'); if (k) return go(k.dataset.kpi);
+    const l = t.closest('[data-legend]'); if (l) { AD.metric = l.dataset.legend; return render(); }
+    const r = t.closest('tr[data-go]'); if (r) location.hash = r.dataset.go;
   };
-  el.onclick = e => { const b = e.target.closest('#dsh-ref'); if (b) { b.classList.add('spin'); PAGES.dashboard(el).catch(x => { el.innerHTML = '<div class="alert err">Could not load this page. ' + esc(friendlyError(x)) + '</div>'; }); } };
+  el.onkeydown = e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"]')) { e.preventDefault(); e.target.click(); } };
+  el.onchange = async e => {
+    if (e.target.id === 'dsh-metric') { AD.metric = e.target.value; render(); }
+    if (e.target.id === 'dsh-range') { AD.range = Number(e.target.value); el.classList.add('dsh-busy'); try { await loadTrends(); } catch (x) { toast(rpcMsg(x), 'err'); } render(); el.classList.remove('dsh-busy'); }
+  };
+  render();
 
   /* ---- top-bar search (lives in the header; removed again when you leave the Dashboard) ---- */
   adRemoveSearch();
@@ -171,7 +212,7 @@ async function adminDash(el) {
     tbr.insertBefore(box, tbr.firstChild);
     const inp = box.querySelector('#dsh-q'), res = box.querySelector('#dsh-res');
     const find = () => { const q = inp.value.trim().toLowerCase(); if (!q) { res.hidden = true; return; }
-      const hit = rows.filter(r => (r.name + ' ' + r.code + ' ' + r.circle).toLowerCase().includes(q)).slice(0, 8);
+      const hit = rowsAll.filter(r => (r.name + ' ' + r.code + ' ' + r.circle).toLowerCase().includes(q)).slice(0, 8);
       res.innerHTML = hit.length ? hit.map(r => `<a href="#/storedetail?s=${r.store_id}"><b>${esc(r.name)}</b><small>${esc(r.code)} · ${esc(r.circle)}</small></a>`).join('') : '<div class="none">No stores match.</div>'; res.hidden = false; };
     inp.oninput = find; inp.onfocus = find;
     inp.onkeydown = e => { if (e.key === 'Escape') { res.hidden = true; inp.blur(); } if (e.key === 'Enter') { const a = res.querySelector('a'); if (a) { location.hash = a.getAttribute('href'); res.hidden = true; inp.value = ''; } } };
@@ -184,7 +225,7 @@ async function adminDash(el) {
 PAGES.storeaudit = async el => {
   if (!S.cycleId) return noCycle(el);
   const cid = S.cycleId, { data: rows, error } = await sb.rpc('dash_stores', { p_cycle: cid }); if (error) throw error;
-  const F = { circle: '', status: '', rate: '', variance: '', q: '', tab: 'ALL', page: 0 }; const PS = 10;
+  const F = { circle: '', status: '', rate: '', variance: '', q: '', tab: 'ALL', page: 0 }; const PS = 10; if (window.__auditPreset) { Object.assign(F, window.__auditPreset); window.__auditPreset = null; }
   const crit = r => r.audit_status === 'COMPLETED' && r.match_rate != null && r.match_rate < 75;
   const list = () => rows.filter(r => (!F.circle || r.circle === F.circle) && (!F.status || r.audit_status === F.status) && (!F.q || (r.name + ' ' + r.code + ' ' + r.circle).toLowerCase().includes(F.q))
     && (!F.rate || (r.match_rate != null && (F.rate === 'crit' ? r.match_rate < 75 : F.rate === 'warn' ? r.match_rate >= 75 && r.match_rate < 90 : r.match_rate >= 90)))
