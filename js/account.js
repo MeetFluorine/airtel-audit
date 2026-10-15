@@ -11,7 +11,15 @@ PAGES.profile = async el => {
     <div class="fld"><label>New Password</label><div class="inp">${ic('key', 18)}<input id="p_new" type="password" placeholder="New password (min 8 characters)" autocomplete="new-password"></div></div>
     <div class="fld"><label>Confirm New Password</label><div class="inp">${ic('key', 18)}<input id="p_cnf" type="password" placeholder="Confirm new password" autocomplete="new-password"></div></div>
     <button class="btn yel" type="submit" style="width:100%;padding:13px">Update Password</button></form></div>`;
-  el.innerHTML = staff ? `<div class="acctgrid">${info}${pw}</div>` : `<div class="pagehead"><div><h1>My Profile</h1><p>View and manage your profile information.</p></div></div>${info}<div style="height:16px"></div>${pw}`;
+  const danger = `<div class="card dz"><span class="dz-ic">${ic('alert', 22)}</span><div class="dz-tx"><h3>Delete account</h3><p>Permanently delete your account and personal details. You will be signed out and will not be able to sign in again. This cannot be undone.</p></div><button class="btn danger-o" id="dz-btn" type="button">Delete my account</button></div>`;
+  el.innerHTML = staff ? `<div class="acctgrid">${info}${pw}</div><div style="height:16px"></div>${danger}` : `<div class="pagehead"><div><h1>My Profile</h1><p>View and manage your profile information.</p></div></div>${info}<div style="height:16px"></div>${pw}<div style="height:16px"></div>${danger}`;
+  el.querySelector('#dz-btn').onclick = () => askDeleteAccount({
+    title: 'Delete your account?', lead: 'This permanently deletes your account.',
+    bullets: ['Your login is removed. You will not be able to sign in again.', 'Your name, email, mobile number and employee ID are erased.',
+      'Audit records you created are kept for your store, but show <b>Deleted user</b> instead of your name.'],
+    run: async txt => { const { error } = await sb.rpc('delete_my_account', { p_confirm: txt }); if (error) throw error;
+      try { await sb.auth.signOut({ scope: 'local' }); } catch (x) { /* the login no longer exists on the server */ }
+      location.hash = '#/login'; toast('Your account has been deleted.', 'ok'); } });
   const g = id => el.querySelector('#' + id).value;
   el.querySelector('#pf').onsubmit = e => { e.preventDefault(); busy(e.target.querySelector('button'), async () => {
     const { error } = await sb.rpc('update_my_profile', { p_name: g('f_name').trim(), p_mobile: g('f_mob').trim() }); if (error) throw error; toast('Profile updated.', 'ok'); await loadProfile(); S.shellUser = null; route(); }).catch(x => toast(rpcMsg(x), 'err')); };

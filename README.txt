@@ -17,3 +17,14 @@ Until step 1 is done the audit page works exactly as before; the checklist just 
 1) Run database/13_dashboard_filter.sql once in the Supabase SQL editor (safe to re-run). It lets the two trend charts follow the selected circle head / circle.
    Without it the dashboard still filters; only the trend charts keep showing all circles (a small note says so).
 2) Changed: js/dashboard.js, js/app.js (menu order + Dashboard subtitle), css/admin-dashboard.css.
+
+---- Permanent account deletion ----
+1) Run database/14_delete_account.sql once in the Supabase SQL editor (safe to re-run). Until it is run, the Delete buttons show an error when used.
+2) Changed: js/account.js (My Account / My Profile), js/admin.js (Users page), js/ui.js (shared dialog), js/reports.js (log label),
+   css/danger-zone.css (new), index.html (1 link).
+
+---- Sign-up: Store level / Management level ----
+1) Run database/15_management_signup.sql once in the Supabase SQL editor (after 14; safe to re-run). Until it is run, management sign-ups cannot be stored as requests.
+2) Changed: js/app.js (chooser + two forms + waiting screen), js/admin.js (Users page: approve management requests),
+   css/signup-choice.css (new), index.html (1 link).
+A management sign-up never grants a role by itself: an existing Admin approves it on the Users page.

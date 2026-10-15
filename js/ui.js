@@ -82,3 +82,12 @@ const cancelBtn = { label: 'Cancel' };
   const run = () => { queued = false; document.querySelectorAll('.tbl td:not([data-w])').forEach(td => { td.dataset.w = '1'; if (td.textContent.trim().length > 28) td.classList.add('wrap'); }); };
   new MutationObserver(() => { if (!queued) { queued = true; (window.requestAnimationFrame || setTimeout)(run); } }).observe(document.documentElement, { childList: true, subtree: true });
 })();
+
+
+/* "Type DELETE to confirm" dialog used for permanent account deletion (My Account and the Users page). */
+function askDeleteAccount({ title, lead, bullets, run }) {
+  const o = openModal(title, `<p>${lead}</p><ul class="dz-list">${bullets.map(b => `<li>${b}</li>`).join('')}</ul><label for="dz-in">Type <b>DELETE</b> to confirm</label><input id="dz-in" autocomplete="off" placeholder="DELETE">`,
+    [cancelBtn, { label: 'Delete permanently', cls: 'danger', fn: async () => { await run(document.getElementById('dz-in').value.trim()); } }]);
+  const go = o.querySelector('.ma .btn.danger'), inp = o.querySelector('#dz-in'); go.disabled = true;
+  inp.oninput = () => { go.disabled = inp.value.trim().toUpperCase() !== 'DELETE'; }; inp.focus(); return o;
+}

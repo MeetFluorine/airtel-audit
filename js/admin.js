@@ -65,24 +65,28 @@ PAGES.users = async el => {
   const byId = () => Object.fromEntries(stores.map(s => [s.id, s]));
   async function load() {
     const [s, c, u, a, h] = await Promise.all([getStores(), getCircles(),
-      sb.from('profiles').select('id,full_name,employee_id,email,mobile,role,status,requested_store_id,reject_reason,created_at').order('created_at', { ascending: false }).limit(1000),
+      sb.from('profiles').select('*').order('created_at', { ascending: false }).limit(1000),
       sb.from('user_store_assignments').select('user_id,store_id'), sb.from('circle_head_assignments').select('user_id,circle_id')]);
     if (u.error) throw u.error; stores = s; circles = c; rows = u.data; asg = Object.fromEntries((a.data || []).map(x => [x.user_id, x.store_id]));
     cha = {}; (h.data || []).forEach(x => (cha[x.user_id] = cha[x.user_id] || []).push(x.circle_id));
     if (!F.status && !F.touched) F.status = rows.some(r => r.status === 'PENDING') ? 'PENDING' : ''; draw();
   }
-  const circleOf = u => { const sid = byId(); if (u.role === 'ADMIN') return 'All'; if (u.role === 'CIRCLE_HEAD') return (cha[u.id] || []).map(i => (circles.find(c => c.id === i) || {}).code).filter(Boolean).join(', ') || '—'; const st = sid[asg[u.id] || u.requested_store_id]; return st ? (st.circles?.code || '—') : '—'; };
-  const list = () => { const sid = byId(); return rows.filter(u => (!F.role || u.role === F.role) && (!F.status || u.status === F.status) && (!F.circle || (u.role === 'STORE_USER' ? (sid[asg[u.id] || u.requested_store_id] || {}).circle_id === F.circle : u.role === 'CIRCLE_HEAD' ? (cha[u.id] || []).includes(F.circle) : false))
+  const rq = u => !!u.requested_role && u.status !== 'APPROVED';            // a management (Circle Head / Admin) request that is not approved yet
+  const effRole = u => rq(u) ? u.requested_role : u.role;
+  const circleOf = u => { const sid = byId(); if (rq(u)) return u.requested_role === 'ADMIN' ? '—' : ((u.requested_circles || []).join(', ') || '—'); if (u.role === 'ADMIN') return 'All'; if (u.role === 'CIRCLE_HEAD') return (cha[u.id] || []).map(i => (circles.find(c => c.id === i) || {}).code).filter(Boolean).join(', ') || '—'; const st = sid[asg[u.id] || u.requested_store_id]; return st ? (st.circles?.code || '—') : '—'; };
+  const list = () => { const sid = byId(); return rows.filter(u => (!F.role || effRole(u) === F.role) && (!F.status || u.status === F.status) && (!F.circle || (rq(u) ? (u.requested_circles || []).includes((circles.find(c => c.id === F.circle) || {}).code) : u.role === 'STORE_USER' ? (sid[asg[u.id] || u.requested_store_id] || {}).circle_id === F.circle : u.role === 'CIRCLE_HEAD' ? (cha[u.id] || []).includes(F.circle) : false))
     && (!F.q || [u.full_name, u.employee_id, u.email, u.mobile].join(' ').toLowerCase().includes(F.q))); };
   function table() {
     const sid = byId(), l = list();
     return tbl(['Full Name', 'Employee ID', 'Email', 'Role', 'Circle', 'Assigned Stores', 'Status', 'Action'], l.slice(F.page * PS, F.page * PS + PS).map(u => { const st = ST[u.status] || [u.status, ''], as = sid[asg[u.id]], req = u.requested_store_id ? sid[u.requested_store_id] : null, me = u.id === S.profile.id; let act = '';
-      if (!me && u.role === 'STORE_USER') {
+      if (!me && rq(u)) { if (isAdmin()) act = `<button class="btn sm yel" data-act="mapprove" data-id="${u.id}">Approve</button>` + (u.status === 'PENDING' ? ` <button class="btn sm" data-act="reject" data-id="${u.id}">Reject</button>` : ''); }
+      else if (!me && u.role === 'STORE_USER') {
         if (u.status === 'PENDING') act = `<button class="btn sm yel" data-act="approve" data-id="${u.id}">Approve</button> <button class="btn sm" data-act="reject" data-id="${u.id}">Reject</button>`;
         else if (u.status === 'APPROVED') act = as ? `<button class="btn sm" data-act="change" data-id="${u.id}">Change store</button>` : `<button class="btn sm yel" data-act="approve" data-id="${u.id}">Assign store</button>`;
         else act = `<button class="btn sm" data-act="approve" data-id="${u.id}">Approve</button>`; }
-      if (!me && isAdmin()) act += ` <button class="btn sm" data-act="role" data-id="${u.id}">Role</button>`;
-      return `<tr><td><b>${esc(u.full_name)}</b></td><td>${esc(u.employee_id || '—')}</td><td>${esc(u.email || '')}<br><span class="muted">${esc(u.mobile || '')}</span></td><td>${u.role.replace('_', ' ')}</td><td>${esc(circleOf(u))}</td>
+      if (!me && isAdmin() && !rq(u)) act += ` <button class="btn sm" data-act="role" data-id="${u.id}">Role</button>`;
+      if (!me) act += ` <button class="btn sm danger-o" data-act="delete" data-id="${u.id}">Delete</button>`;
+      return `<tr><td><b>${esc(u.full_name)}</b></td><td>${esc(u.employee_id || '—')}</td><td>${esc(u.email || '')}<br><span class="muted">${esc(u.mobile || '')}</span></td><td>${effRole(u).replace('_', ' ')}${rq(u) ? ' <span class="muted">(requested)</span>' : ''}</td><td>${esc(circleOf(u))}</td>
         <td>${as ? esc(as.code) : (req && u.status === 'PENDING' ? `<span class="muted">requested: ${esc(req.code)}</span>` : '—')}</td><td>${badge(st[0], st[1])}</td><td class="nw">${act}</td></tr>`; }).join('')) + numPager(l.length, F.page, PS);
   }
   function draw() {
@@ -100,8 +104,22 @@ PAGES.users = async el => {
     const b = e.target.closest('[data-act]'); if (!b) return;
     if (b.dataset.act === 'invite') { const link = location.origin + location.pathname + '#/signup';
       return openModal('Add a user', `<p>New users register themselves, then you approve them here and assign their store.</p><label>Registration link</label><div class="row"><div><input id="m_link" value="${esc(link)}" readonly></div><button class="btn" id="m_copy" type="button">Copy</button></div>
-        <p class="muted">To make someone a Circle Head or Admin: let them register, approve them, then use the <b>Role</b> button${isAdmin() ? '' : ' (admins only)'}.</p>`, [{ label: 'Close' }]).querySelector('#m_copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(link); toast('Link copied.', 'ok'); }; }
+        <p class="muted">The link lets them choose <b>Store Level</b> or <b>Management Level</b> (Circle Head / Admin). Management requests are approved by an administrator on this page.</p>`, [{ label: 'Close' }]).querySelector('#m_copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(link); toast('Link copied.', 'ok'); }; }
     const u = rows.find(r => r.id === b.dataset.id); if (!u) return; const cur = asg[u.id] || u.requested_store_id;
+    if (b.dataset.act === 'delete') return askDeleteAccount({ title: `Delete ${u.full_name}?`, lead: `This permanently deletes the ${u.role.replace('_', ' ').toLowerCase()} account of <b>${esc(u.full_name)}</b>.`,
+      bullets: ['Their login is removed. They cannot sign in again (they would have to register again).', 'Their name, email, mobile number and employee ID are erased and their store / circle assignment is removed.',
+        'Audit records they created are kept, but show <b>Deleted user</b>.'],
+      run: async txt => { const { error } = await sb.rpc('admin_delete_user', { p_user: u.id, p_confirm: txt }); if (error) throw error; toast('User deleted.', 'ok'); load(); } });
+    if (b.dataset.act === 'mapprove') {
+      const want = new Set(u.requested_circles || []), isA = u.requested_role === 'ADMIN';
+      const o = openModal(`Approve ${u.full_name}`, `<label>Role</label><select id="m_role">${['CIRCLE_HEAD', 'ADMIN'].map(r => `<option value="${r}" ${r === u.requested_role ? 'selected' : ''}>${r.replace('_', ' ')}</option>`).join('')}</select>
+        <div id="m_ch" ${isA ? 'hidden' : ''}><label>Circles this Circle Head manages</label><div class="chips">${circles.map(c => `<label class="chk"><input type="checkbox" class="cc" value="${c.id}" ${want.has(c.code) ? 'checked' : ''}> ${esc(c.code)}</label>`).join('')}</div></div>
+        <div id="m_warn" class="alert warn" ${isA ? '' : 'hidden'} style="margin-top:12px">Admins can see and change everything, including users and audits. Approve only if you know this person.</div>`, [cancelBtn,
+        { label: 'Approve', cls: 'yel', fn: async m => { const role = m.querySelector('#m_role').value, ids = [...m.querySelectorAll('.cc:checked')].map(i => i.value);
+          if (role === 'CIRCLE_HEAD' && !ids.length) { toast('Select at least one circle.', 'err'); return false; }
+          const { error } = await sb.rpc('admin_approve_management', { p_user: u.id, p_role: role, p_circles: role === 'CIRCLE_HEAD' ? ids : [] }); if (error) throw error; toast('User approved.', 'ok'); load(); } }]);
+      return o.querySelector('#m_role').onchange = ev => { o.querySelector('#m_ch').hidden = ev.target.value !== 'CIRCLE_HEAD'; o.querySelector('#m_warn').hidden = ev.target.value !== 'ADMIN'; };
+    }
     const pick = `<label>Store</label><select id="m_store"><option value="">Select store…</option>${storeOpts(stores, cur)}</select>`;
     const need = () => { const v = document.getElementById('m_store').value; if (!v) { toast('Please select a store.', 'err'); return null; } return v; };
     if (b.dataset.act === 'approve') openModal(`Approve ${u.full_name}`, `<p class="muted">The user will be able to audit only this store.</p>${pick}`, [cancelBtn,

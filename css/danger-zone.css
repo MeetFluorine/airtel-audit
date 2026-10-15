@@ -1,0 +1,8 @@
+/* Delete-account card (My Account / My Profile) and the confirmation dialog list. */
+.dz{display:flex;align-items:center;gap:16px;padding:18px 22px;border:1px solid #F5C6C2;background:#FFF8F7}
+.dz .dz-ic{width:42px;height:42px;border-radius:12px;background:#FDE2E2;color:#D92D20;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.dz .dz-tx{flex:1;min-width:0}.dz h3{margin:0 0 4px;font-size:16px;color:#7A1C14}.dz p{margin:0;font-size:13px;color:#6B4A47;line-height:1.5}
+.dz .btn{white-space:nowrap;flex-shrink:0}
+.dz-list{margin:6px 0 14px;padding-left:18px;font-size:13px;color:#44564F;line-height:1.55}.dz-list li{margin-bottom:4px}
+.mdl .btn.danger:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:640px){.dz{flex-direction:column;align-items:flex-start}.dz .btn{width:100%}}

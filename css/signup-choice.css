@@ -1,0 +1,16 @@
+/* Sign-up: account-type chooser + management form */
+.pick{display:flex;flex-direction:column;gap:14px;margin:18px 0 8px}
+.pcard{display:flex;align-items:center;gap:16px;padding:18px 20px;border:1.5px solid #E3ECE8;border-radius:16px;background:#fff;color:inherit;text-decoration:none;transition:border-color .12s,box-shadow .12s,transform .12s}
+.pcard:hover{border-color:#E5B800;box-shadow:0 8px 22px rgba(2,37,27,.10);transform:translateY(-2px);text-decoration:none}
+.pcard:focus-visible{outline:2px solid #E5B800;outline-offset:2px}
+.pcard .pic{width:54px;height:54px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.pcard .pic.y{background:#FFF1BF;color:#B7791F}.pcard .pic.g{background:#DDF3E6;color:#16874B}
+.pcard b{display:block;font-size:17px;color:#0B2A1F}.pcard small{display:block;font-size:13px;color:#6B7B75;margin-top:3px;line-height:1.4}
+.pcard>div{flex:1;min-width:0}.pcard .pgo{color:#6B7B75;flex-shrink:0}.pcard:hover .pgo{color:#0B2A1F}
+.cpick{display:flex;flex-wrap:wrap;gap:8px}
+.cpick .cp{position:relative;cursor:pointer;margin:0}
+.cpick .cp input{position:absolute;opacity:0;pointer-events:none}
+.cpick .cp span{display:inline-block;border:1.5px solid #D3DEDA;border-radius:99px;padding:6px 14px;font-size:13px;font-weight:600;color:#44564F;background:#fff}
+.cpick .cp input:checked+span{background:#FFD22E;border-color:#FFD22E;color:#0F1F1A}
+.cpick .cp input:focus-visible+span{outline:2px solid #E5B800;outline-offset:2px}
+#circ_box[hidden]{display:none}

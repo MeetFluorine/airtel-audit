@@ -84,21 +84,41 @@ function loginView() {
 }
 function forgotView() { return authShell('login', `<h3>Reset password</h3><p class="sub">We will email you a reset link.</p><form id="f">${fld('email', 'Email Address', 'mail', 'email', 'Enter your email', 'required')}<button class="btn go" type="submit">Send reset link</button></form><div class="foot"><a href="#/login">Back to login</a></div>`); }
 function resetView() { return authShell('login', `<h3>Set a new password</h3><p class="sub">Choose a password with at least 8 characters.</p><form id="f">${fld('password', 'New password', 'key', 'password', 'Create new password', 'required minlength="8" autocomplete="new-password"')}<button class="btn go" type="submit">Save password</button></form>`); }
+const backTo = '<div class="foot" style="margin-top:6px"><a href="#/signup">‹ Choose a different account type</a></div>';
+function signupChoiceView() {
+  const card = (href, icon, tone, t, d) => `<a class="pcard" href="${href}"><span class="pic ${tone}">${ic(icon, 26, 1.8)}</span><div><b>${t}</b><small>${d}</small></div><span class="pgo">${ic('arrow', 20, 2)}</span></a>`;
+  return authShell('register', `<h3>Create Your Account</h3><p class="sub">Choose how you will use Shadowfax.</p>
+    <div class="pick">${card('#/signup/store', 'store', 'y', 'Store Level', 'For store teams. Audit the inventory of your own store.')}
+    ${card('#/signup/management', 'users', 'g', 'Management Level', 'For Circle Heads and Admins. Manage circles, stores, users and audits.')}</div>
+    <div class="foot">Already have an account? <a href="#/login">Login here</a></div>`);
+}
 async function signupView() {
   const { data, error } = await sb.rpc('public_store_list');
   const groups = {}; (data || []).forEach(s => (groups[s.circle_code] = groups[s.circle_code] || []).push(s));
   const opts = Object.keys(groups).sort().map(c => `<optgroup label="${esc(c)}">${groups[c].map(s => `<option value="${s.id}">${esc(s.name)} (${esc(s.code)})</option>`).join('')}</optgroup>`).join('');
-  return authShell('register', `<h3>Create Your Account</h3><p class="sub">Fill in your details to register. Your request will be reviewed by the admin.</p>${error ? '<div class="alert err">Could not load the store list. Please refresh.</div>' : ''}
+  return authShell('register', `<h3>Store Level Sign Up</h3><p class="sub">Fill in your details to register. Your request will be reviewed by the admin.</p>${error ? '<div class="alert err">Could not load the store list. Please refresh.</div>' : ''}
     <form id="f">${fld('full_name', 'Full Name', 'user', 'text', 'Enter your full name', 'required')}${fld('employee_id', 'Employee ID', 'id', 'text', 'Enter employee ID', 'required')}
     <div class="row2">${fld('email', 'Email Address', 'mail', 'email', 'Enter your email', 'required autocomplete="username"')}${fld('mobile', 'Mobile Number', 'phone', 'tel', 'Enter mobile number', 'required pattern="[0-9]{10}" inputmode="numeric"')}</div>
     <div class="row2"><div class="fld"><label for="store_id">Select Store</label><div class="inp">${ic('store', 18)}<select id="store_id" required><option value="">Choose your store</option>${opts}</select></div></div>${fld('password', 'Password', 'key', 'password', 'Create password', 'required minlength="8" autocomplete="new-password"')}</div>
     <div class="infobox">${ic('info', 20)}<div><b>Your registration will be sent for admin approval.</b>You will be able to log in once your account is approved.</div></div>
-    <button class="btn go" type="submit">Register ${ic('arrow', 18)}</button></form><div class="foot">Already have an account? <a href="#/login">Login here</a></div>`, true);
+    <button class="btn go" type="submit">Register ${ic('arrow', 18)}</button></form><div class="foot">Already have an account? <a href="#/login">Login here</a></div>${backTo}`, true);
+}
+async function signupMgmtView() {
+  const { data, error } = await sb.rpc('public_store_list');
+  const codes = [...new Set((data || []).map(s => s.circle_code))].sort();
+  return authShell('register', `<h3>Management Level Sign Up</h3><p class="sub">For Circle Heads and Admins. An administrator reviews every request.</p>${error ? '<div class="alert err">Could not load the circle list. Please refresh.</div>' : ''}
+    <form id="f">${fld('full_name', 'Full Name', 'user', 'text', 'Enter your full name', 'required')}${fld('employee_id', 'Employee ID', 'id', 'text', 'Enter employee ID', 'required')}
+    <div class="row2">${fld('email', 'Email Address', 'mail', 'email', 'Enter your email', 'required autocomplete="username"')}${fld('mobile', 'Mobile Number', 'phone', 'tel', 'Enter mobile number', 'required pattern="[0-9]{10}" inputmode="numeric"')}</div>
+    <div class="row2"><div class="fld"><label for="req_role">Access Requested</label><div class="inp">${ic('users', 18)}<select id="req_role" required><option value="CIRCLE_HEAD">Circle Head</option><option value="ADMIN">Admin</option></select></div></div>${fld('password', 'Password', 'key', 'password', 'Create password', 'required minlength="8" autocomplete="new-password"')}</div>
+    <div class="fld" id="circ_box"><label>Circles you will manage</label><div class="cpick">${codes.map(c => `<label class="cp"><input type="checkbox" class="rc" value="${esc(c)}"><span>${esc(c)}</span></label>`).join('') || '<span class="muted">No circles available yet.</span>'}</div></div>
+    <div class="infobox">${ic('info', 20)}<div><b>Your request will be sent to an administrator.</b>You can log in once it is approved. Admin access is only given after the administrator verifies who you are.</div></div>
+    <button class="btn go" type="submit">Request access ${ic('arrow', 18)}</button></form><div class="foot">Already have an account? <a href="#/login">Login here</a></div>${backTo}`, true);
 }
 function holdView(rejected) {
   const p = S.profile;
   const body = !p ? `<h3>Account not ready</h3><p class="sub">We could not load your profile. Please try again.</p>`
     : rejected ? `<h3>Request not approved</h3><p class="sub">Your access request was not approved${p.reject_reason ? ': ' + esc(p.reject_reason) : ''}. Please contact your administrator.</p>`
+    : p.requested_role ? `<h3>Waiting for approval</h3><p class="sub">Hi ${esc(p.full_name)}, your request for <b>${ROLE_LABEL[p.requested_role] === 'Administrator' ? 'Admin' : ROLE_LABEL[p.requested_role]}</b> access has been sent. An administrator will review it. You can close this page and log in again later.</p>`
     : `<h3>Waiting for approval</h3><p class="sub">Hi ${esc(p.full_name)}, your request has been sent. An administrator will approve your access to your store. You can close this page and log in again later.</p>`;
   return authShell('login', `${body}<button class="btn go" id="out" type="button">Log out</button>${!p ? '<div class="foot"><a href="#/login" id="retry">Retry</a></div>' : ''}`);
 }
@@ -187,8 +207,10 @@ async function route() {
   let html, wire = () => {};
   if (S.recovery) { html = resetView(); wire = wireReset; }
   else if (!S.session) {
-    const v = ['login', 'signup', 'forgot'].includes(h) ? h : 'login';
-    if (v === 'signup') { root().innerHTML = loadingView('workspace'); html = await signupView(); wire = wireSignup; }
+    const seg = h.split('/'), v = ['login', 'signup', 'forgot'].includes(seg[0]) ? seg[0] : 'login';
+    if (v === 'signup' && seg[1] === 'store') { root().innerHTML = loadingView('workspace'); html = await signupView(); wire = wireSignup; }
+    else if (v === 'signup' && seg[1] === 'management') { root().innerHTML = loadingView('workspace'); html = await signupMgmtView(); wire = wireSignupMgmt; }
+    else if (v === 'signup') { html = signupChoiceView(); }
     else if (v === 'forgot') { html = forgotView(); wire = wireForgot; } else { html = loginView(); wire = wireLogin; }
   }
   else if (!S.profile || S.profile.status === 'PENDING') html = holdView(false);
@@ -218,6 +240,17 @@ function wireSignup() {
   submit(async () => {
     if (!val('store_id')) { toast('Please select your store.', 'err'); return; }
     const { data, error } = await sb.auth.signUp({ email: val('email'), password: document.getElementById('password').value, options: { data: { full_name: val('full_name'), employee_id: val('employee_id'), mobile: val('mobile'), store_id: val('store_id') } } });
+    if (error) throw error; if (!data.session) toast('Account created. Please confirm your email, then log in.', 'ok');
+  });
+}
+function wireSignupMgmt() {
+  const role = document.getElementById('req_role'), box = document.getElementById('circ_box');
+  role.onchange = () => { box.hidden = role.value !== 'CIRCLE_HEAD'; };
+  submit(async () => {
+    const circles = role.value === 'CIRCLE_HEAD' ? [...document.querySelectorAll('.rc:checked')].map(i => i.value) : [];
+    if (role.value === 'CIRCLE_HEAD' && !circles.length) { toast('Please select at least one circle.', 'err'); return; }
+    const { data, error } = await sb.auth.signUp({ email: val('email'), password: document.getElementById('password').value,
+      options: { data: { full_name: val('full_name'), employee_id: val('employee_id'), mobile: val('mobile'), requested_role: role.value, requested_circles: circles } } });
     if (error) throw error; if (!data.session) toast('Account created. Please confirm your email, then log in.', 'ok');
   });
 }
