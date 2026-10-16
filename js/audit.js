@@ -279,7 +279,13 @@ function preview(el, c) {
 /* ---- result (store user: own result only; admin / circle head: opened from Store Audit). No export, by design. ---- */
 PAGES.result = async el => {
   const hq = new URLSearchParams(location.hash.split('?')[1] || ''); let sid = hq.get('sess');
-  if (!isStaff()) {
+  const cyc = hq.get('cycle');
+  if (!isStaff() && cyc) {                                   // a previous cycle picked from the Audit Cycle chip
+    const { data: rs, error } = await sb.from('audit_sessions').select('id').eq('audit_cycle_id', cyc).eq('status', 'LOCKED').order('version', { ascending: false }).limit(1);
+    if (error) throw error;
+    if (!rs.length) { el.innerHTML = '<div class="card startcard"><h2>No result for this cycle</h2><p class="muted">Your store has no submitted audit in the cycle you selected.</p><a class="btn yel" href="#/dashboard">Back to dashboard</a></div>'; return; }
+    sid = rs[0].id;
+  } else if (!isStaff()) {
     const { data: c, error } = await sb.rpc('my_audit_context'); if (error) throw error;
     if (!c.session || c.session.status !== 'LOCKED') {
       el.innerHTML = `<div class="card startcard"><h2>${c.session ? 'Your audit is in progress' : 'No result yet'}</h2><p class="muted">Your result appears here after you submit your audit.${c.session && c.session.reopen_reason ? ' An administrator reopened it: ' + esc(c.session.reopen_reason) : ''}</p>${c.session ? '<a class="btn yel" href="#/audit">Continue audit</a>' : ''}</div>`; return; }
@@ -291,10 +297,16 @@ PAGES.result = async el => {
 async function resultView(el, sid, embedded) {
   const staff = isStaff();
   const cnt = async ser => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser)).count) || 0;
-  const [si, sm, nSer, nNon, vbR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true), cnt(false), sb.rpc('store_variance_breakdown', { p_session: sid })]);
+  const [si, sm, nSer, nNon, vbR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,store_id,audit_cycle_id,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true), cnt(false), sb.rpc('store_variance_breakdown', { p_session: sid })]);
   if (si.error || !si.data) throw si.error || new Error('Result not found');
   if (sm.error) throw sm.error;
-  const ss = si.data, m = sm.data; let tab = 'ALL', q = '', page = 0, timer = null; const PS = 50;
+  const ss = si.data, m = sm.data; let tab = 'ALL', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
+  const subCache = {}; let rows = [];
+  /* remarks on short items (optional; the column is skipped if the remarks table is not installed yet) */
+  const rkey = r => [r.item_code, r.inventory_status || '', r.item_quality || '', r.item_sno || ''].join('\u0001');
+  const rmR = await sb.from('result_remarks').select('item_code,inventory_status,item_quality,item_sno,remark').eq('store_id', ss.store_id).eq('audit_cycle_id', ss.audit_cycle_id);
+  const rmkOk = !rmR.error, rmk = {}; if (rmkOk) rmR.data.forEach(r => { rmk[rkey(r)] = r.remark; });
+  const canEdit = rmkOk && !staff && ss.status === 'LOCKED';
   const tabs = [['ALL', 'All Items', m.rows_all], ['SERIAL', 'Serialized', nSer], ['NONSERIAL', 'Non-Serialized', nNon], ['MATCH', 'Matched', m.rows_match], ['SHORT', 'Short', m.rows_short], ['EXCESS', 'Excess', m.rows_excess]];
   const matched = Number(m.matched), shortU = Number(m.short), excessU = Number(m.excess), totalU = matched + shortU + excessU;
   const vb = Object.assign({ ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, (vbR && vbR.data) || {}), vmx = Math.max(1, vb.ser_short, vb.ser_excess, vb.non_short, vb.non_excess);
@@ -303,6 +315,7 @@ async function resultView(el, sid, embedded) {
   el.innerHTML = `<div class="resfit">${embedded ? '' : `<div class="pagehead"><div><a class="btn sm" href="${staff ? '#/storeaudit' : '#/dashboard'}" style="margin-bottom:10px">${ic('back', 15)} Back</a>
       <h1>Audit Result - ${esc(ss.stores?.code || '')} ${badge(ss.status === 'LOCKED' ? 'Completed' : 'Superseded version', ss.status === 'LOCKED' ? 'ok' : 'warn')}</h1><p>${esc(ss.audit_cycles?.name || '')} · Version ${ss.version} · Submitted ${fdt(ss.submitted_at)}</p></div><span class="live">${ic('lock', 14)} Locked</span></div>`}
     <div class="resgrid"><div class="resleft"><div class="bar"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div></div>
+        <div class="subtabs" id="rsub" hidden></div>
         <div class="inp" style="margin-bottom:12px">${ic('search', 18)}<input id="q" placeholder="Search by item code, description or serial..."></div><div id="rt"></div></div>
       <div class="card sumcard"><div class="cardhead"><b style="font-size:16px">Audit Summary</b>${badge(m.match_rate == null ? 'No expected stock' : Number(m.match_rate).toFixed(1) + '% match', m.match_rate == null ? '' : m.match_rate >= 90 ? 'ok' : m.match_rate >= 75 ? 'warn' : 'bad')}</div>
         <span class="sect" style="margin-top:4px">Result Breakdown</span>
@@ -312,20 +325,65 @@ async function resultView(el, sid, embedded) {
         <span class="sect">Variance by type</span>${vr('Serialized Short', vb.ser_short, '#E5484D')}${vr('Non-Serialized Short', vb.non_short, '#F59E0B')}${vr('Serialized Excess', vb.ser_excess, '#2563EB')}${vr('Non-Serialized Excess', vb.non_excess, '#14B8A6')}
         <div class="lines"><span>${fn(m.rows_match)} matched lines</span><span>${fn(m.rows_short)} short lines</span><span>${fn(m.rows_excess)} excess lines</span></div></div></div></div>`;
   const pg2 = el.closest('.page2'); if (pg2 && !embedded) pg2.classList.add('fixed');
-  const mark = () => el.querySelectorAll('#rtabs [data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab));
+  const split = () => tab === 'SERIAL' || tab === 'NONSERIAL';
+  async function subCounts() {
+    if (subCache[tab]) return subCache[tab]; const ser = tab === 'SERIAL';
+    const c = async r => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser).eq('result', r)).count) || 0;
+    const [a, b, d] = await Promise.all([c('MATCH'), c('SHORT'), c('EXCESS')]); return subCache[tab] = { ALL: a + b + d, MATCH: a, SHORT: b, EXCESS: d };
+  }
+  async function drawSub() {
+    const box = el.querySelector('#rsub'); box.hidden = !split(); if (!split()) return;
+    const n = await subCounts();
+    box.innerHTML = [['ALL', 'All'], ['MATCH', 'Matched'], ['SHORT', 'Short'], ['EXCESS', 'Excess']].map(([k, l]) => `<button type="button" class="${k === sub ? 'on' : ''} ${k}" data-sub="${k}">${l} (${fn(n[k])})</button>`).join('');
+  }
+  const mark = () => { el.querySelectorAll('#rtabs [data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab)); drawSub(); };
   async function load() {
     mark(); const rt = el.querySelector('#rt'); rt.innerHTML = '<div class="boot">Loading…</div>';
     let qb = sb.from('reconciliation_results').select('item_code,inventory_status,item_description,item_uom,expected_qty,physical_qty,item_quality,item_sno,result,is_unlisted', { count: 'exact' }).eq('session_id', sid);
     if (tab === 'SERIAL') qb = qb.eq('is_serialized', true); else if (tab === 'NONSERIAL') qb = qb.eq('is_serialized', false); else if (tab !== 'ALL') qb = qb.eq('result', tab);
+    if (split() && sub !== 'ALL') qb = qb.eq('result', sub);
     const t = q.replace(/[,()%*\\]/g, ' ').trim(); if (t) qb = qb.or(`item_code.ilike.*${t}*,item_sno.ilike.*${t}*,item_description.ilike.*${t}*`);
     const { data, error, count } = await qb.order('item_code').order('item_sno').range(page * PS, page * PS + PS - 1);
     if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))}</div>`; return; }
+    rows = data;
+    const rbox = (r, i) => { if (!rmkOk || r.result !== 'SHORT') return ''; const v = rmk[rkey(r)] || ''; return canEdit ? `<div class="rmkw"><input class="rmk" data-i="${i}" maxlength="500" placeholder="Add remarks (optional)" value="${esc(v)}" aria-label="Remarks for ${esc(r.item_code)}"><span class="rmks"></span></div>` : (v ? `<div class="rmkr">Remarks: ${esc(v)}</div>` : ''); };
     rt.innerHTML = tbl(['#', 'Item_Code', 'Inventory_Status', 'Item_Description', 'UoM', 'Expected Qty', 'Physical Qty', 'Variance', 'Quality', 'Item_SNo', 'Result'], data.map((r, i) => { const v = Number(r.physical_qty) - Number(r.expected_qty);
-      return `<tr><td>${page * PS + i + 1}</td><td><b>${esc(r.item_code)}</b></td><td>${esc(r.inventory_status || '')}</td><td>${esc(r.item_description || '')}</td><td>${esc(r.item_uom || '')}</td><td>${fn(r.expected_qty)}</td><td>${fn(r.physical_qty)}</td>
+      return `<tr><td>${page * PS + i + 1}</td><td><b>${esc(r.item_code)}</b></td><td>${esc(r.inventory_status || '')}</td><td>${esc(r.item_description || '')}${rbox(r, i)}</td><td>${esc(r.item_uom || '')}</td><td>${fn(r.expected_qty)}</td><td>${fn(r.physical_qty)}</td>
         <td class="${v < 0 ? 'neg' : v > 0 ? 'pos' : ''}">${v > 0 ? '+' : ''}${fn(v)}</td><td>${esc(r.item_quality || '')}</td><td>${esc(r.item_sno || '—')}</td><td>${badge(r.result === 'MATCH' ? 'Matched' : r.result === 'SHORT' ? 'Short' : 'Excess', r.result === 'MATCH' ? 'ok' : r.result === 'SHORT' ? 'bad' : 'warn')}${r.is_unlisted ? ' ' + badge('Unlisted', 'bad') : ''}</td></tr>`; }).join('')) +
       `<div class="bar"><span class="muted">${fn(count)} row(s)</span><div class="row"><button class="btn sm" data-pg="-1" ${page ? '' : 'disabled'}>Previous</button><button class="btn sm" data-pg="1" ${(page + 1) * PS < count ? '' : 'disabled'}>Next</button></div></div>`;
   }
-  el.onclick = e => { const t = e.target.closest('#rtabs [data-ty]'); if (t) { tab = t.dataset.ty; page = 0; return load(); } const g = e.target.closest('[data-pg]'); if (g) { page += Number(g.dataset.pg); load(); } };
+  el.onclick = e => { const t = e.target.closest('#rtabs [data-ty]'); if (t) { tab = t.dataset.ty; sub = 'ALL'; page = 0; return load(); }
+    const sb2 = e.target.closest('[data-sub]'); if (sb2) { sub = sb2.dataset.sub; page = 0; return load(); }
+    const g = e.target.closest('[data-pg]'); if (g) { page += Number(g.dataset.pg); load(); } };
+  el.onchange = async e => {
+    const inp = e.target.closest('.rmk'); if (!inp) return; const r = rows[+inp.dataset.i], st = inp.parentElement.querySelector('.rmks'), val = inp.value.trim();
+    if (!r || val === (rmk[rkey(r)] || '')) return; st.textContent = 'Saving…'; st.className = 'rmks';
+    const { error } = await sb.rpc('set_result_remark', { p_session: sid, p_item_code: r.item_code, p_status: r.inventory_status || '', p_quality: r.item_quality || '', p_sno: r.item_sno || '', p_remark: val });
+    if (error) { st.textContent = 'Not saved'; st.className = 'rmks err'; toast(rpcMsg(error), 'err'); return; }
+    if (val) rmk[rkey(r)] = val; else delete rmk[rkey(r)]; st.textContent = val ? 'Saved ✓' : 'Removed'; st.className = 'rmks ok'; setTimeout(() => { st.textContent = ''; }, 2500);
+  };
   el.querySelector('#q').oninput = e => { clearTimeout(timer); const v = e.target.value; timer = setTimeout(() => { q = v; page = 0; load(); }, 300); };
   await load();
+}
+
+
+/* ---- store user: the Audit Cycle chip opens a list of cycles; pick one to see that cycle's result ---- */
+if (!window.__cycHist) {
+  window.__cycHist = true;
+  document.addEventListener('click', async e => {
+    const pop = document.getElementById('cyc-pop'), btn = e.target.closest('#cyc-btn');
+    if (!pop) return;
+    if (!btn) { if (!e.target.closest('#cyc-pop')) pop.hidden = true; return; }
+    if (!pop.hidden) { pop.hidden = true; btn.setAttribute('aria-expanded', 'false'); return; }
+    pop.hidden = false; btn.setAttribute('aria-expanded', 'true'); pop.innerHTML = '<div class="cyc-none">Loading cycles…</div>';
+    const [c, ss] = await Promise.all([sb.from('audit_cycles').select('id,name,status,created_at').order('created_at', { ascending: false }), sb.from('audit_sessions').select('audit_cycle_id,status,submitted_at').order('version', { ascending: false })]);
+    if (c.error || ss.error) { pop.innerHTML = '<div class="cyc-none">Could not load cycles.</div>'; return; }
+    const by = {}; (ss.data || []).forEach(x => { const o = by[x.audit_cycle_id] = by[x.audit_cycle_id] || {}; if (x.status === 'LOCKED') o.locked = x; else if (x.status === 'IN_PROGRESS') o.prog = true; });
+    const now = (S.ctx && S.ctx.cycle && S.ctx.cycle.id) || null, viewing = new URLSearchParams(location.hash.split('?')[1] || '').get('cycle');
+    pop.innerHTML = `<div class="cyc-h">Audit cycles</div>` + (c.data.length ? c.data.map(x => { const o = by[x.id] || {}, act = x.id === now;
+      const st = o.locked ? `<span class="cyc-s ok">Result • ${esc(fdt(o.locked.submitted_at))}</span>` : o.prog ? '<span class="cyc-s warn">In progress</span>' : '<span class="cyc-s">No audit</span>';
+      const go = o.locked ? '#/result?cycle=' + x.id : act ? '#/dashboard' : '';
+      return `<${go ? 'a href="' + go + '"' : 'div'} class="cyc-it ${go ? '' : 'off'} ${x.id === (viewing || now) ? 'on' : ''}"><span><b>${esc(x.name)}</b>${act ? '<em>Current</em>' : ''}</span>${st}</${go ? 'a' : 'div'}>`; }).join('') : '<div class="cyc-none">No cycles yet.</div>');
+  });
+  window.addEventListener('hashchange', () => { const pop = document.getElementById('cyc-pop'); if (pop) pop.hidden = true; });
 }

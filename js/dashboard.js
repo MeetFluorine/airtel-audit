@@ -132,6 +132,13 @@ async function adminDash(el) {
         <div class="chips">${cs.slice(0, 4).map(c => `<span title="${esc(c)}">${esc(c)}</span>`).join('')}${cs.length > 4 ? `<span>+${cs.length - 4}</span>` : ''}</div>
         <div class="st"><div><small>Total Stores</small><b>${st}</b></div><div><small>Completed</small><b class="g">${dn} (${pc(dn)}%)</b></div><div><small>Pending</small><b class="r">${pend} (${pc(pend)}%)</b></div></div></div>`; }).join('');
 
+    /* circle heads manage a few circles, so they get one card per circle (all circles, the selected one is highlighted) */
+    const isHead = !isAdmin(), cstat = {};
+    rowsAll.forEach(r => { const c = cstat[r.circle] = cstat[r.circle] || { name: r.circle, stores: 0, done: 0 }; c.stores++; if (r.audit_status === 'COMPLETED') c.done++; });
+    const circCards = Object.values(cstat).sort((a, b) => String(a.name).localeCompare(b.name)).map((c, i) => { const pend = c.stores - c.done, pc = v => c.stores ? Math.round(100 * v / c.stores) : 0, pl = pal[i % pal.length], on = AD.f && AD.f.type === 'circle' && AD.f.key === c.name;
+      return `<div class="dsh-h dsh-c ${on ? 'sel' : ''}" role="button" tabindex="0" data-circ="${esc(c.name)}" aria-pressed="${on}" title="${on ? 'Click to clear the filter' : 'Show the dashboard for ' + esc(c.name)}"><div class="hd"><span class="av" style="background:${pl[0]};color:${pl[1]}">${esc(String(c.name).slice(0, 2).toUpperCase())}</span><div class="nm"><b title="${esc(c.name)}">${esc(c.name)}</b></div></div>
+        <div class="st"><div><small>Total Stores</small><b>${c.stores}</b></div><div><small>Completed</small><b class="g">${c.done} (${pc(c.done)}%)</b></div><div><small>Pending</small><b class="r">${pend} (${pc(pend)}%)</b></div></div></div>`; }).join('');
+
     /* top circles */
     const cmap = {}; rows.forEach(r => { const c = cmap[r.circle] = cmap[r.circle] || { name: r.circle, stores: 0, done: 0, short: 0, excess: 0 }; c.stores++; if (r.audit_status === 'COMPLETED') { c.done++; c.short += num(r.short); c.excess += num(r.excess); } });
     const [mLabel, mCol] = METRIC[AD.metric], val = c => AD.metric === 'pending' ? c.stores - c.done : c[AD.metric];
@@ -154,8 +161,10 @@ async function adminDash(el) {
     el.innerHTML = `<div class="dsh">
     <div class="dsh-upd">${chip}<div class="r"><span>Last Updated : ${esc(now)}</span><button id="dsh-ref" type="button">${ic('sync', 15, 2)} Refresh</button></div></div>
     <div class="dsh-kpis">${kpis}</div>
-    <section class="dsh-card"><div class="dsh-head">${tile('user')}<div class="ht"><b>Circle Head Summary</b><small>Select a circle head to filter the dashboard</small></div><div class="hr"><a class="dsh-btn" href="#/users">View All Circle Heads ${ic('arrow', 15, 2)}</a></div></div>
-      ${headCards ? `<div class="dsh-heads">${headCards}</div>` : '<div class="dsh-empty">No circle heads or circles to show.</div>'}</section>
+    ${isHead ? `<section class="dsh-card"><div class="dsh-head">${tile('users')}<div class="ht"><b>Circle Summary</b><small>Select a circle to filter the dashboard</small></div></div>
+      ${circCards ? `<div class="dsh-heads auto">${circCards}</div>` : '<div class="dsh-empty">No circles to show.</div>'}</section>`
+    : `<section class="dsh-card"><div class="dsh-head">${tile('user')}<div class="ht"><b>Circle Head Summary</b><small>Select a circle head to filter the dashboard</small></div><div class="hr"><a class="dsh-btn" href="#/users">View All Circle Heads ${ic('arrow', 15, 2)}</a></div></div>
+      ${headCards ? `<div class="dsh-heads">${headCards}</div>` : '<div class="dsh-empty">No circle heads or circles to show.</div>'}</section>`}
     <div class="dsh-r2">
       <section class="dsh-card"><div class="dsh-head">${tile('users')}<div class="ht"><b>Top 5 Circles</b></div><div class="hr"><select id="dsh-metric" aria-label="Rank circles by">${Object.entries(METRIC).map(([k, v]) => `<option value="${k}" ${k === AD.metric ? 'selected' : ''}>By ${v[0]}</option>`).join('')}</select></div></div><div class="dsh-bars">${bars}</div></section>
       <section class="dsh-card"><div class="dsh-head">${tile('box')}<div class="ht"><b>Stock Condition</b></div></div>

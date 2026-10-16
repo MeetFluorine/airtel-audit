@@ -146,7 +146,7 @@ function staffTop(cur) {
 function storeTop() {
   const st = S.store;
   return `<header class="tb"><div class="chip-i"><span class="tile">${ic('store', 18)}</span><div><b>${st ? esc(st.code) : '—'}</b><small>${st && st.circles ? esc(st.circles.name) + ' (' + esc(st.circles.code) + ')' : ''}</small></div></div>
-    <div class="tb-r"><div class="chip-i cal"><span class="tile">${ic('cal', 18)}</span><div><small>Audit Cycle</small><b id="cyc-name">…</b></div></div>${bell()}<a class="avatar" href="#/profile">${esc(initials(S.profile.full_name))}</a></div></header>`;
+    <div class="tb-r"><div class="cycwrap"><button type="button" class="chip-i cal cyc-btn" id="cyc-btn" aria-haspopup="true" aria-expanded="false" title="See previous audit cycles and their results"><span class="tile">${ic('cal', 18)}</span><div><small>Audit Cycle</small><b id="cyc-name">…</b></div><span class="chev">▾</span></button><div class="cyc-pop" id="cyc-pop" hidden></div></div>${bell()}<a class="avatar" href="#/profile">${esc(initials(S.profile.full_name))}</a></div></header>`;
 }
 function shell(page) {
   const staff = isStaff(), cur = resolvePage(page, staff); S.cur = cur;

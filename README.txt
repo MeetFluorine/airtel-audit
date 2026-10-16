@@ -28,3 +28,9 @@ Until step 1 is done the audit page works exactly as before; the checklist just 
 2) Changed: js/app.js (chooser + two forms + waiting screen), js/admin.js (Users page: approve management requests),
    css/signup-choice.css (new), index.html (1 link).
 A management sign-up never grants a role by itself: an existing Admin approves it on the Users page.
+
+---- Circle head circle cards, result sub-filter, remarks, cycle history ----
+1) Run database/16_result_remarks.sql once in the Supabase SQL editor (after 15; safe to re-run). Without it the result page works as before, just without the remarks boxes.
+2) Changed: js/dashboard.js (circle cards for Circle Heads), js/audit.js (result sub-filter, remarks, old-cycle result, cycle history),
+   js/app.js (Audit Cycle chip for store users), css/result-extras.css (new), css/admin-dashboard.css, index.html.
+Viewing old cycle results needs no SQL: store users could already read their own store's sessions and results.
