@@ -1,0 +1,6 @@
+/* Sidebar: Close cycle + Delete cycle side by side (admin) */
+.cyc .rowb{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.cyc .rowb .btn{margin-top:0;width:100%}
+.cyc .btn.clo{border-color:#F5B83D;color:#FFD27A}
+.cyc .btn.clo:hover:not(:disabled){background:rgba(245,184,61,.12)}
+.cyc .btn:disabled{opacity:.4;cursor:not-allowed}

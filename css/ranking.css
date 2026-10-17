@@ -1,0 +1,9 @@
+/* Ranking pages */
+.rk{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 10px;border-radius:99px;background:#EEF3F0;color:#0F1F1A;font-weight:800;font-size:15px}
+.rk.r1{background:#FFD22E;color:#0F1F1A}.rk.r2{background:#DDE3E8;color:#0F1F1A}.rk.r3{background:#F3C9A0;color:#0F1F1A}
+.rk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:6px}
+.rk-big{padding:20px;text-align:center}.rk-big small{display:block;font-size:12.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#6B7B75}
+.rk-n{font-size:46px;font-weight:800;line-height:1.15;margin:6px 0 2px;color:#0F1F1A}.rk-of{font-size:13.5px;color:#44564F}.rk-sub{font-size:12.5px;color:#6B7B75;margin-top:6px}
+.rk-top{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}.rk-top .card{padding:16px;display:flex;flex-direction:column;gap:4px}
+.rk-top small{color:#6B7B75;font-size:12px}.rk-top b{font-size:18px}.rk-tp{font-size:22px;font-weight:800;color:#137A3F;margin-top:4px}
+.rk-how{margin-top:14px;font-size:13.5px;color:#44564F}.rk-how summary{cursor:pointer;font-weight:600}.rk-how p{margin:8px 0}

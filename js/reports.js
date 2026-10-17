@@ -12,7 +12,7 @@ const REPORTS = {
     head: ['Audit Cycle', 'Circle', 'Store', 'Version', 'Status', 'Started By', 'Started At', 'Submitted By', 'Submitted At', 'Reopened By', 'Reopened At', 'Reopen Reason'] }
 };
 const LOG_LBL = Object.assign({}, EVT, { LOGIN: 'Login', USER_APPROVED: 'User approved', USER_REJECTED: 'User rejected', USER_STORE_CHANGED: 'User store changed', REPORT_EXPORTED: 'Report exported',
-  STORE_REPORT_NAME_SET: 'Store report name set', BASE_UPLOAD_WARNING: 'Base upload warning', CYCLE_DELETED: 'Cycle deleted', USER_DELETED: 'User deleted' });
+  STORE_REPORT_NAME_SET: 'Store report name set', BASE_UPLOAD_WARNING: 'Base upload warning', CYCLE_DELETED: 'Cycle deleted', CYCLE_CLOSED: 'Cycle closed', USER_DELETED: 'User deleted' });
 const slug = s => String(s || '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
 const staffOnly = el => { if (!isStaff()) { el.innerHTML = '<div class="card startcard"><h2>Not available</h2></div>'; return true; } return false; };
 

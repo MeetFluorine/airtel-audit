@@ -76,12 +76,20 @@ if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
     pickStore();
   }
   function pickStore() {
-    st.res = null; $('s4').innerHTML = ''; const s = sById(st.store), a = st.acs.find(x => x.store_id === st.store);
+    st.res = null; st.aud = null; $('s4').innerHTML = ''; const s = sById(st.store), a = st.acs.find(x => x.store_id === st.store);
     $('s3').hidden = !s; if (!s) return $('sinfo').innerHTML = '';
     $('file').value = '';
+    const frozen = !!(a && a.active_upload_id);
     $('sinfo').innerHTML = `<div class="kv"><div><span>Selected store</span><b>${esc(s.name)}</b></div><div><span>Store code</span><b>${esc(s.code)}</b></div><div><span>Circle</span><b>${esc(s.circles?.code || '')}</b></div>
-      <div><span>Base stock</span><b>${a && a.active_upload_id ? '✓ Frozen' : 'Not uploaded'}</b></div></div>` +
-      (a && a.active_upload_id ? '<div class="alert info">Base stock is already frozen for this store. You can upload a revised version only until its audit starts.</div>' : '');
+      <div><span>Base stock</span><b>${frozen ? '✓ Frozen' : 'Not uploaded'}</b></div></div><div id="bsnote">${frozen ? '<div class="alert info">Base stock is already frozen for this store. Uploading a new file replaces the entire base stock.</div>' : ''}</div>`;
+    if (!frozen) return;
+    const want = st.store, cyc = st.cycle;       // is there an audit for this store? Only an Admin may replace the base stock after it started
+    sb.from('audit_sessions').select('status').eq('audit_cycle_id', cyc).eq('store_id', want).in('status', ['IN_PROGRESS', 'LOCKED']).limit(1).then(({ data }) => {
+      if (st.store !== want || st.cycle !== cyc || !data || !data[0]) return;
+      st.aud = data[0].status; const done = st.aud === 'LOCKED', n = el.querySelector('#bsnote');
+      if (isAdmin()) { if (n) n.innerHTML = `<div class="alert warn">This store's audit is <b>${done ? 'completed' : 'in progress'}</b>. Uploading a new file replaces the <b>entire</b> base stock and ${done ? "the audit result is recalculated against the new base stock" : 'the audit continues against the new base stock'}.</div>`; }
+      else { $('s3').hidden = true; if (n) n.innerHTML = `<div class="alert info">This store's audit has ${done ? 'been completed' : 'started'}. Only an Admin can replace its base stock now.</div>`; }
+    });
   }
   $('cyc').onchange = e => { st.cycle = e.target.value; st.store = ''; loadCycle().catch(x => toast(rpcMsg(x), 'err')); };
   $('sto').onchange = e => { st.store = e.target.value; pickStore(); };
@@ -133,16 +141,17 @@ if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
       ${r.errors.length ? `<details open><summary>${r.errors.length} row(s) with errors (they will NOT be imported)</summary>${tbl(['Excel row', 'Issue', 'Item code', 'Serial'], r.errors.slice(0, 200).map(x => `<tr><td>${x.row}</td><td>${esc(x.issue)}</td><td>${esc(x.code)}</td><td>${esc(x.sno)}</td></tr>`).join(''))}${r.errors.length > 200 ? '<p class="muted">Showing the first 200.</p>' : ''}</details>
         <label class="chk"><input type="checkbox" id="okerr"> I understand ${r.errors.length} invalid row(s) will not be imported.</label>` : ''}
       <div class="step">5</div><b>Confirm &amp; freeze</b><div id="prog"></div>
-      <button class="btn primary" id="go" ${r.valid.length && !r.errors.length ? '' : 'disabled'}>FREEZE BASE STOCK</button></div>`;
+      <button class="btn primary" id="go" ${r.valid.length && !r.errors.length ? '' : 'disabled'}>${(st.acs.find(x => x.store_id === store.id) || {}).active_upload_id ? 'REPLACE BASE STOCK' : 'FREEZE BASE STOCK'}</button></div>`;
     const go = $('go'); if ($('okerr')) $('okerr').onchange = e => (go.disabled = !(e.target.checked && r.valid.length));
-    go.onclick = () => openModal('Freeze base stock?', `<p>${r.valid.length.toLocaleString()} rows will be saved for <b>${esc(store.name)}</b> in <b>${esc(cyc.name)}</b> and frozen.</p><p class="muted">Store users never see this data. Once their audit starts, it cannot be replaced.</p>`,
-      [cancelBtn, { label: 'Freeze', cls: 'primary', fn: () => { setTimeout(() => run(store).catch(e => { $('prog').innerHTML = `<div class="alert err">${esc(rpcMsg(e))}</div>`; }), 0); } }]);
+    const had = !!(st.acs.find(x => x.store_id === store.id) || {}).active_upload_id;
+    go.onclick = () => openModal(had ? 'Replace base stock?' : 'Freeze base stock?', `<p>${r.valid.length.toLocaleString()} rows will be saved for <b>${esc(store.name)}</b> in <b>${esc(cyc.name)}</b> and frozen${had ? ', <b>replacing the entire existing base stock</b>' : ''}.</p>${st.aud ? `<p class="alert warn">This store's audit is ${st.aud === 'LOCKED' ? 'completed: its result will be recalculated against the new base stock' : 'in progress: it will continue against the new base stock'}.</p>` : '<p class="muted">Store users never see this data.</p>'}`,
+      [cancelBtn, { label: had ? 'Replace' : 'Freeze', cls: 'primary', fn: () => { setTimeout(() => run(store).catch(e => { $('prog').innerHTML = `<div class="alert err">${esc(rpcMsg(e))}</div>`; }), 0); } }]);
   }
 
   async function run(store) {
     const r = st.res, f = st.file, c = st.cycle, p = $('prog'), go = $('go'); go.disabled = true;
     const say = t => (p.innerHTML = `<div class="alert info">${esc(t)}</div>`);
-    let uid = null;
+    let uid = null; const aud = st.aud;
     try {
       say('Preparing…');
       const old = await sb.from('base_stock_uploads').select('id').eq('audit_cycle_id', c).eq('store_id', store.id).eq('status', 'DRAFT');
@@ -168,7 +177,7 @@ if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
       if (uid) { await sb.from('base_stock').delete().eq('upload_id', uid); await sb.from('base_stock_uploads').delete().eq('id', uid); }   // never leave a half-written draft
       go.disabled = false; throw e;
     }
-    const okHtml = `<div class="card sec"><div class="alert ok"><b>✓ Base Stock Frozen</b> for ${esc(store.name)}: ${r.valid.length.toLocaleString()} rows (${r.ser.toLocaleString()} serialized, ${r.non} non-serialized).</div></div>`;
+    const okHtml = `<div class="card sec"><div class="alert ok"><b>✓ Base Stock ${aud ? 'Replaced' : 'Frozen'}</b> for ${esc(store.name)}: ${r.valid.length.toLocaleString()} rows (${r.ser.toLocaleString()} serialized, ${r.non} non-serialized).${aud ? (aud === 'LOCKED' ? ' The audit result was recalculated against it.' : ' The running audit now uses it.') : ''}</div></div>`;
     st.store = store.id; await loadCycle(); $('s4').innerHTML = okHtml;
   }
 };

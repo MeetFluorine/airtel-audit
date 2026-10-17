@@ -46,7 +46,7 @@ async function storeDash(el) {
   const p = S.profile; const { data: c, error } = await sb.rpc('my_audit_context'); if (error) throw error;
   const s = c.session, cn = c.counts || {}, first = (p.full_name || '').split(' ')[0];
   let sum = null; if (s && s.status === 'LOCKED') { const r = await sb.rpc('result_summary', { p_session: s.id }); sum = r.data; }
-  const cta = !c.cycle ? '<div class="alert warn" style="margin:0">No audit is open for your store yet. Your administrator needs to open a cycle and upload your store\'s base stock.</div>'
+  const cta = !c.cycle ? '<div class="alert warn" style="margin:0">No audit is open for your store yet. Set up your store\'s base data from <a href="#/basedata">Base Data</a> (or ask your administrator).</div>'
     : s && s.status === 'LOCKED' ? `<a class="btn yel xl" href="#/result">${ic('clip', 20)} View Result ${ic('arrow', 20)}</a>`
     : `<a class="btn yel xl" href="#/audit">${ic('play', 20)} ${s ? 'Continue Audit' : 'Start Audit'} ${ic('arrow', 20)}</a>`;
   el.innerHTML = `<div class="hero2"><div><h1>${greet()}, ${esc(first)}! 👋</h1><p class="hp">Let's complete the physical stock audit<br>for your store.</p></div>
@@ -59,7 +59,7 @@ PAGES.audit = async el => {
   Q.leave();
   if (isStaff()) { el.innerHTML = '<div class="card" style="padding:24px"><h2>Store users only</h2><p class="muted">Audits are performed by the store team.</p></div>'; return; }
   const { data: c, error } = await sb.rpc('my_audit_context'); if (error) throw error;
-  if (!c.cycle) { el.innerHTML = '<div class="card startcard"><h2>No audit is open for your store yet</h2><p class="muted">Your administrator needs to upload your store\'s base stock first.</p></div>'; return; }
+  if (!c.cycle) { el.innerHTML = '<div class="card startcard"><h2>No audit is open for your store yet</h2><p class="muted">Your store\'s base data has to be set up first. <a href="#/basedata">Open Base Data</a> to upload it, or ask your administrator.</p></div>'; return; }
   if (!c.session) {
     el.innerHTML = `<div class="pagehead"><div><h1>Start Audit</h1></div></div><div class="card startcard"><span class="big">${ic('filesearch', 48, 1.5)}</span><p>You are about to start the physical stock audit<br>for <b>${esc(c.store.code)}</b>.</p>
       <p class="muted" style="font-size:14px">Please ensure you have the physical stock available before starting.</p><div class="btnrow"><a class="btn" href="#/dashboard" style="padding:14px">Cancel</a><button class="btn yel" id="go" style="padding:14px">Start Audit ${ic('arrow', 18)}</button></div></div>`;
@@ -297,34 +297,45 @@ PAGES.result = async el => {
 async function resultView(el, sid, embedded) {
   const staff = isStaff();
   const cnt = async ser => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser)).count) || 0;
-  const [si, sm, nSer, nNon, vbR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,store_id,audit_cycle_id,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true), cnt(false), sb.rpc('store_variance_breakdown', { p_session: sid })]);
+  const [si, sm, nSer, nNon, vbR, fvR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,store_id,audit_cycle_id,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true), cnt(false), sb.rpc('store_variance_breakdown', { p_session: sid }), sb.rpc('result_filter_values', { p_session: sid })]);
   if (si.error || !si.data) throw si.error || new Error('Result not found');
   if (sm.error) throw sm.error;
   const ss = si.data, m = sm.data; let tab = 'ALL', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
   const subCache = {}; let rows = [];
+  const fv = fvR && !fvR.error && fvR.data ? fvR.data : null;      // distinct values for the click-to-select filters (database/19); without it those columns fall back to "contains"
   /* remarks on short items (optional; the column is skipped if the remarks table is not installed yet) */
   const rkey = r => [r.item_code, r.inventory_status || '', r.item_quality || '', r.item_sno || ''].join('\u0001');
   const rmR = await sb.from('result_remarks').select('item_code,inventory_status,item_quality,item_sno,remark').eq('store_id', ss.store_id).eq('audit_cycle_id', ss.audit_cycle_id);
   const rmkOk = !rmR.error, rmk = {}; if (rmkOk) rmR.data.forEach(r => { rmk[rkey(r)] = r.remark; });
   const canEdit = rmkOk && !staff && ss.status === 'LOCKED';
   const tabs = [['ALL', 'All Items', m.rows_all], ['SERIAL', 'Serialized', nSer], ['NONSERIAL', 'Non-Serialized', nNon], ['MATCH', 'Matched', m.rows_match], ['SHORT', 'Short', m.rows_short], ['EXCESS', 'Excess', m.rows_excess]];
-  const matched = Number(m.matched), shortU = Number(m.short), excessU = Number(m.excess), totalU = matched + shortU + excessU;
-  const vb = Object.assign({ ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, (vbR && vbR.data) || {}), vmx = Math.max(1, vb.ser_short, vb.ser_excess, vb.non_short, vb.non_excess);
-  const vr = (l, v, col) => `<div class="vbar"><span>${l}</span><div class="tr"><i style="width:${100 * v / vmx}%;background:${col}"></i></div><b>${fn(v)}</b></div>`;
-  const mt = (i, l, bg, bd, tbg, fg, v) => `<div class="mtile" style="background:${bg};border-color:${bd}"><span class="tile" style="background:${tbg};color:${fg}">${ic(i, 17)}</span><span><small>${l}</small><b>${v}</b></span></div>`;
-  el.innerHTML = `<div class="resfit">${embedded ? '' : `<div class="pagehead"><div><a class="btn sm" href="${staff ? '#/storeaudit' : '#/dashboard'}" style="margin-bottom:10px">${ic('back', 15)} Back</a>
-      <h1>Audit Result - ${esc(ss.stores?.code || '')} ${badge(ss.status === 'LOCKED' ? 'Completed' : 'Superseded version', ss.status === 'LOCKED' ? 'ok' : 'warn')}</h1><p>${esc(ss.audit_cycles?.name || '')} · Version ${ss.version} · Submitted ${fdt(ss.submitted_at)}</p></div><span class="live">${ic('lock', 14)} Locked</span></div>`}
-    <div class="resgrid"><div class="resleft"><div class="bar"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div></div>
-        <div class="subtabs" id="rsub" hidden></div>
-        <div class="inp" style="margin-bottom:12px">${ic('search', 18)}<input id="q" placeholder="Search by item code, description or serial..."></div><div id="rt"></div></div>
-      <div class="card sumcard"><div class="cardhead"><b style="font-size:16px">Audit Summary</b>${badge(m.match_rate == null ? 'No expected stock' : Number(m.match_rate).toFixed(1) + '% match', m.match_rate == null ? '' : m.match_rate >= 90 ? 'ok' : m.match_rate >= 75 ? 'warn' : 'bad')}</div>
-        <span class="sect" style="margin-top:4px">Result Breakdown</span>
-        <div class="ringwrap">${donut([{ v: matched, color: '#16A34A' }, { v: shortU, color: '#E5484D' }, { v: excessU, color: '#F5B301' }], m.match_rate == null ? '—' : Number(m.match_rate).toFixed(1) + '%', 'match rate', 190, 14)}</div>
-        <div class="legend2">${[['Matched', '#16A34A', matched], ['Short', '#E5484D', shortU], ['Excess', '#F5B301', excessU]].map(([l, c, v]) => `<div class="row3"><i style="background:${c}"></i><span>${l}</span><b>${fn(v)}</b><span>${totalU ? (100 * v / totalU).toFixed(1) : '0.0'}%</span></div>`).join('')}</div>
-        <div class="mgrid">${mt('box', 'Expected', '#F3F6FF', '#DCE5FA', '#E5EDFF', '#2563EB', fn(m.expected))}${mt('check', 'Found', '#EEF9F2', '#CBEBD8', '#E6F7EC', '#16A34A', fn(m.physical))}${mt('alert', 'Short', '#FFF1F1', '#F8D3D3', '#FFE0E0', '#E5484D', fn(shortU))}${mt('zap', 'Excess', '#FFF9E6', '#F6E3A4', '#FFF1CC', '#C58A00', fn(excessU))}</div>
-        <span class="sect">Variance by type</span>${vr('Serialized Short', vb.ser_short, '#E5484D')}${vr('Non-Serialized Short', vb.non_short, '#F59E0B')}${vr('Serialized Excess', vb.ser_excess, '#2563EB')}${vr('Non-Serialized Excess', vb.non_excess, '#14B8A6')}
-        <div class="lines"><span>${fn(m.rows_match)} matched lines</span><span>${fn(m.rows_short)} short lines</span><span>${fn(m.rows_excess)} excess lines</span></div></div></div></div>`;
-  const pg2 = el.closest('.page2'); if (pg2 && !embedded) pg2.classList.add('fixed');
+  const matched = Number(m.matched), shortU = Number(m.short), excessU = Number(m.excess);
+  const vb = Object.assign({ ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, (vbR && vbR.data) || {});
+  const rate = m.match_rate == null ? null : Number(m.match_rate);
+  const trs = Number(m.short_transit || 0), shSub = m.short_transit == null || !shortU ? '' : `In transit ${fn(trs)} · Other ${fn(shortU - trs)}`;      // split only; the Short figure itself is unchanged
+  const stat = (cls, icon, label, val, sub = '') => `<div class="rst"><span class="ric ${cls}">${ic(icon, 26)}</span><div><small>${label}</small><b class="${cls}">${val}</b>${sub ? `<em>${sub}</em>` : ''}</div></div>`;
+  const pill = (cls, icon, html) => `<span class="pl ${cls}">${ic(icon, 17)}<span>${html}</span></span>`;
+  const pills = [pill('g', 'check', `<b>${fn(m.rows_match)}</b> matched lines`), pill('r', 'alert', `<b>${fn(m.rows_short)}</b> short lines`), pill('y', 'zap', `<b>${fn(m.rows_excess)}</b> excess lines`),
+    vb.ser_short ? pill('b', 'barcode', `Serialized short <b>${fn(vb.ser_short)}</b>`) : '', vb.non_short ? pill('p', 'box', `Non-serialized short <b>${fn(vb.non_short)}</b>`) : '',
+    vb.ser_excess ? pill('n', 'barcode', `Serialized excess <b>${fn(vb.ser_excess)}</b>`) : '', vb.non_excess ? pill('n', 'box', `Non-serialized excess <b>${fn(vb.non_excess)}</b>`) : ''].join('');
+  el.innerHTML = `<div class="resfit">
+    <div class="rhead"><div class="rh1">${staff ? `<a class="btn sm" href="#/storeaudit">${ic('back', 15)} Back</a>` : ''}<h1>Audit Result - ${esc(ss.stores?.code || '')}</h1>${badge(ss.status === 'LOCKED' ? 'Completed' : 'Superseded version', ss.status === 'LOCKED' ? 'ok' : 'warn')}
+      <span class="rmeta">${esc(ss.audit_cycles?.name || '')} · Version ${ss.version} · Submitted ${fdt(ss.submitted_at)}</span></div><span class="live">${ic('lock', 14)} Locked</span></div>
+    <div class="card rsum2"><div class="rdon">${donut([{ v: matched, color: '#16A34A' }, { v: shortU, color: '#E5484D' }, { v: excessU, color: '#F5B301' }], rate == null ? '—' : rate.toFixed(1) + '%', 'Match Rate', 170, 13)}</div>
+      <div class="rright"><div class="rstats">${stat('', 'box', 'Expected', fn(m.expected))}${stat('g', 'check', 'Found', fn(m.physical))}${stat('r', 'alert', 'Short', fn(shortU), shSub)}${stat('y', 'trend', 'Excess', fn(excessU))}</div>
+        <div class="rpills">${pills}</div></div></div>
+    <div class="rtool"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div>
+      <div class="inp rsearch">${ic('search', 18)}<input id="q" placeholder="Search item code, description or serial..."></div></div>
+    <div class="subtabs" id="rsub" hidden></div><div class="fchips" id="rchips" hidden></div><div id="rt"></div></div>`;
+
+  /* ---- column filters (shared module js/colfilter.js): click the funnel in a column header ---- */
+  const CF = colFilters([{ k: 'item_code', l: 'Item Code', t: 'list' }, { k: 'item_description', l: 'Description', t: 'text' }, { k: 'inventory_status', l: 'Status', t: 'list' }, { k: 'item_uom', l: 'UoM', t: 'list' },
+    { k: 'expected_qty', l: 'Expected', t: 'num' }, { k: 'physical_qty', l: 'Physical', t: 'num' }, { k: 'variance', l: 'Variance', t: 'num' }, { k: 'item_quality', l: 'Quality', t: 'list' },
+    { k: 'item_sno', l: 'Item SNo', t: 'text' }, { k: 'result', l: 'Result', t: 'list' }], fv, () => { page = 0; load(); });
+  const HEADS = ['item_code', 'item_description', 'inventory_status', 'item_uom', 'expected_qty', 'physical_qty', 'variance', 'item_quality', 'item_sno', 'result'];
+  const WIDTHS = rmkOk ? [4, 9, 15, 9, 5, 7, 7, 7, 7, 11, 7, 12] : [4, 10, 19, 10, 6, 8, 8, 8, 7, 12, 8];     // % of the table width: it always fits, no sideways scrolling
+  const ib = v => !v ? '—' : `<span class="ib ${/transit/i.test(v) ? 'b' : /^active$/i.test(v) ? 'g' : 'n'}">${esc(v)}</span>`;
+
   const split = () => tab === 'SERIAL' || tab === 'NONSERIAL';
   async function subCounts() {
     if (subCache[tab]) return subCache[tab]; const ser = tab === 'SERIAL';
@@ -336,25 +347,34 @@ async function resultView(el, sid, embedded) {
     const n = await subCounts();
     box.innerHTML = [['ALL', 'All'], ['MATCH', 'Matched'], ['SHORT', 'Short'], ['EXCESS', 'Excess']].map(([k, l]) => `<button type="button" class="${k === sub ? 'on' : ''} ${k}" data-sub="${k}">${l} (${fn(n[k])})</button>`).join('');
   }
-  const mark = () => { el.querySelectorAll('#rtabs [data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab)); drawSub(); };
+  const mark = () => { el.querySelectorAll('#rtabs [data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab)); drawSub(); CF.chips(el.querySelector('#rchips')); };
   async function load() {
     mark(); const rt = el.querySelector('#rt'); rt.innerHTML = '<div class="boot">Loading…</div>';
     let qb = sb.from('reconciliation_results').select('item_code,inventory_status,item_description,item_uom,expected_qty,physical_qty,item_quality,item_sno,result,is_unlisted', { count: 'exact' }).eq('session_id', sid);
     if (tab === 'SERIAL') qb = qb.eq('is_serialized', true); else if (tab === 'NONSERIAL') qb = qb.eq('is_serialized', false); else if (tab !== 'ALL') qb = qb.eq('result', tab);
     if (split() && sub !== 'ALL') qb = qb.eq('result', sub);
     const t = q.replace(/[,()%*\\]/g, ' ').trim(); if (t) qb = qb.or(`item_code.ilike.*${t}*,item_sno.ilike.*${t}*,item_description.ilike.*${t}*`);
+    qb = CF.apply(qb);
     const { data, error, count } = await qb.order('item_code').order('item_sno').range(page * PS, page * PS + PS - 1);
     if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))}</div>`; return; }
     rows = data;
-    const rbox = (r, i) => { if (!rmkOk || r.result !== 'SHORT') return ''; const v = rmk[rkey(r)] || ''; return canEdit ? `<div class="rmkw"><input class="rmk" data-i="${i}" maxlength="500" placeholder="Add remarks (optional)" value="${esc(v)}" aria-label="Remarks for ${esc(r.item_code)}"><span class="rmks"></span></div>` : (v ? `<div class="rmkr">Remarks: ${esc(v)}</div>` : ''); };
-    rt.innerHTML = tbl(['#', 'Item_Code', 'Inventory_Status', 'Item_Description', 'UoM', 'Expected Qty', 'Physical Qty', 'Variance', 'Quality', 'Item_SNo', 'Result'], data.map((r, i) => { const v = Number(r.physical_qty) - Number(r.expected_qty);
-      return `<tr><td>${page * PS + i + 1}</td><td><b>${esc(r.item_code)}</b></td><td>${esc(r.inventory_status || '')}</td><td>${esc(r.item_description || '')}${rbox(r, i)}</td><td>${esc(r.item_uom || '')}</td><td>${fn(r.expected_qty)}</td><td>${fn(r.physical_qty)}</td>
-        <td class="${v < 0 ? 'neg' : v > 0 ? 'pos' : ''}">${v > 0 ? '+' : ''}${fn(v)}</td><td>${esc(r.item_quality || '')}</td><td>${esc(r.item_sno || '—')}</td><td>${badge(r.result === 'MATCH' ? 'Matched' : r.result === 'SHORT' ? 'Short' : 'Excess', r.result === 'MATCH' ? 'ok' : r.result === 'SHORT' ? 'bad' : 'warn')}${r.is_unlisted ? ' ' + badge('Unlisted', 'bad') : ''}</td></tr>`; }).join('')) +
-      `<div class="bar"><span class="muted">${fn(count)} row(s)</span><div class="row"><button class="btn sm" data-pg="-1" ${page ? '' : 'disabled'}>Previous</button><button class="btn sm" data-pg="1" ${(page + 1) * PS < count ? '' : 'disabled'}>Next</button></div></div>`;
+    const rbox = (r, i) => { if (!rmkOk || r.result !== 'SHORT') return ''; const v = rmk[rkey(r)] || ''; return canEdit ? `<div class="rmkw"><input class="rmk" data-i="${i}" maxlength="500" placeholder="Add remarks (optional)" value="${esc(v)}" aria-label="Remarks for ${esc(r.item_code)}"><span class="rmks"></span></div>` : (v ? `<div class="rmkr">${esc(v)}</div>` : ''); };
+    const SHORTL = { expected_qty: ['Expected', 'Exp.'], physical_qty: ['Physical', 'Phys.'], variance: ['Variance', 'Var.'] };      // the short form shows on narrower screens
+    const heads = ['#', ...HEADS.map(k => CF.th(k, SHORTL[k] ? `<span class="lf">${SHORTL[k][0]}</span><span class="ls">${SHORTL[k][1]}</span>` : undefined)), ...(rmkOk ? ['Remarks'] : [])];
+    const body = data.map((r, i) => { const v = Number(r.physical_qty) - Number(r.expected_qty), d = r.item_description || '';
+      return `<tr class="${r.result === 'SHORT' ? 'rshort' : ''}"><td>${page * PS + i + 1}</td><td><b>${esc(r.item_code)}</b></td><td><span class="clamp" title="${esc(d)}">${esc(d)}</span></td><td>${ib(r.inventory_status)}</td><td>${esc(r.item_uom || '')}</td><td>${fn(r.expected_qty)}</td><td>${fn(r.physical_qty)}</td>
+        <td class="${v < 0 ? 'neg' : v > 0 ? 'pos' : ''}">${v > 0 ? '+' : ''}${fn(v)}</td><td>${esc(r.item_quality || '')}</td><td class="sno">${esc(r.item_sno || '—')}</td><td>${badge(r.result === 'MATCH' ? 'Matched' : r.result === 'SHORT' ? 'Short' : 'Excess', r.result === 'MATCH' ? 'ok' : r.result === 'SHORT' ? 'bad' : 'warn')}${r.is_unlisted ? ' ' + badge('Unlisted', 'bad') : ''}</td>${rmkOk ? `<td class="rmcell">${rbox(r, i) || '—'}</td>` : ''}</tr>`; }).join('');
+    const pages = Math.max(1, Math.ceil(count / PS)), set = new Set([0, pages - 1, page - 1, page, page + 1]), shown = [...set].filter(x => x >= 0 && x < pages).sort((x, y) => x - y), nums = [];
+    shown.forEach((x, i) => { if (i && x - shown[i - 1] > 1) nums.push('…'); nums.push(x); });
+    rt.innerHTML = `<div class="tw"><table class="tbl rtbl"><colgroup>${WIDTHS.map(w => `<col style="width:${w}%">`).join('')}</colgroup><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>
+      ${data.length ? '' : '<div class="muted" style="padding:18px">No rows match the selected filters.</div>'}
+      <div class="rfoot"><span class="muted">Showing ${count ? fn(page * PS + 1) : 0}–${fn(Math.min((page + 1) * PS, count))} of ${fn(count)} rows${count !== m.rows_all ? ` (Filtered from ${fn(m.rows_all)})` : ''}</span>
+        <div class="pgn"><button type="button" class="pgb" data-pgn="${page - 1}" ${page ? '' : 'disabled'}>‹ Previous</button>${nums.map(x => x === '…' ? '<span class="pge">…</span>' : `<button type="button" class="pgb ${x === page ? 'on' : ''}" data-pgn="${x}">${x + 1}</button>`).join('')}<button type="button" class="pgb" data-pgn="${page + 1}" ${(page + 1) * PS < count ? '' : 'disabled'}>Next ›</button></div></div></div>`;
   }
-  el.onclick = e => { const t = e.target.closest('#rtabs [data-ty]'); if (t) { tab = t.dataset.ty; sub = 'ALL'; page = 0; return load(); }
+  el.onclick = e => { if (CF.handle(e)) return;
+    const t = e.target.closest('#rtabs [data-ty]'); if (t) { tab = t.dataset.ty; sub = 'ALL'; page = 0; return load(); }
     const sb2 = e.target.closest('[data-sub]'); if (sb2) { sub = sb2.dataset.sub; page = 0; return load(); }
-    const g = e.target.closest('[data-pg]'); if (g) { page += Number(g.dataset.pg); load(); } };
+    const g = e.target.closest('[data-pgn]'); if (g && !g.disabled) { page = Number(g.dataset.pgn); load().then(() => el.querySelector('#rtabs').scrollIntoView({ block: 'start', behavior: 'smooth' })); } };
   el.onchange = async e => {
     const inp = e.target.closest('.rmk'); if (!inp) return; const r = rows[+inp.dataset.i], st = inp.parentElement.querySelector('.rmks'), val = inp.value.trim();
     if (!r || val === (rmk[rkey(r)] || '')) return; st.textContent = 'Saving…'; st.className = 'rmks';
@@ -365,7 +385,6 @@ async function resultView(el, sid, embedded) {
   el.querySelector('#q').oninput = e => { clearTimeout(timer); const v = e.target.value; timer = setTimeout(() => { q = v; page = 0; load(); }, 300); };
   await load();
 }
-
 
 /* ---- store user: the Audit Cycle chip opens a list of cycles; pick one to see that cycle's result ---- */
 if (!window.__cycHist) {
