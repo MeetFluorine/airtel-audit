@@ -86,7 +86,7 @@ details{margin:10px 0}summary{cursor:pointer;font-weight:600;color:#B91C1C;margi
 .cta{text-align:left}.cta .btn.primary{width:auto;display:inline-block}
 @media(max-width:900px){.aud{grid-template-columns:1fr}.scan-in{font-size:20px}}
 /* ---- Phase 4: results ---- */
-.kv.kpi{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}.kv.kpi b{font-size:22px}
+.kv.kpi{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.kv.kpi b{font-size:22px}
 .kv .a{background:#FFFBEB;border-color:#FDE68A}.kv .a b{color:#B45309}
 .pos{color:#B45309;font-weight:700}.neg{color:#B91C1C;font-weight:700}
 .hist{padding:8px 0;border-bottom:1px solid #F3F4F6;font-size:13px}

@@ -1,14 +1,27 @@
 // Audit cycle controls in the sidebar: pick + Load an existing cycle, create a new one (name only), CLOSE one (admin, any time), delete one PERMANENTLY.
 async function loadCycles() {
-  const { data, error } = await sb.from('audit_cycles').select('id,name,status,created_at').order('created_at', { ascending: false });
-  if (error) throw error; S.cycles = data || [];
+  let q = await sb.from('audit_cycles').select('id,name,status,created_at,deadline_at').order('created_at', { ascending: false });
+  if (q.error && /deadline_at/.test(q.error.message || ''))  // migration 22 not run yet: carry on without deadlines
+    q = await sb.from('audit_cycles').select('id,name,status,created_at').order('created_at', { ascending: false });
+  if (q.error) throw q.error;
+  const data = q.data;
+  S.cycles = data || [];
   let id = sessionStorage.getItem('sfx_cycle');
   if (!S.cycles.some(c => c.id === id)) id = (S.cycles.find(c => c.status === 'ACTIVE') || S.cycles[0] || {}).id || null;
   applyCycle(id);
 }
 function applyCycle(id) {
-  S.cycleId = id; const c = S.cycles.find(x => x.id === id); S.cycleName = c ? c.name : ''; S.progress = null;
+  S.cycleId = id; const c = S.cycles.find(x => x.id === id); S.cycleName = c ? c.name : ''; S.cycleDeadline = c ? c.deadline_at : null; S.progress = null;
   if (id) sessionStorage.setItem('sfx_cycle', id); else sessionStorage.removeItem('sfx_cycle');
+}
+// Days left until the cycle deadline (3 days from creation). Negative = overdue.
+function deadlineDays() { return S.cycleDeadline == null ? null : Math.ceil((new Date(S.cycleDeadline) - Date.now()) / 864e5); }
+function deadlineChip() {
+  const d = deadlineDays(); if (d == null) return '';
+  const dstr = new Date(S.cycleDeadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  if (d < 0) return `<div class="conn" style="color:#ff6b6b;font-weight:700">Overdue by ${-d} day${-d === 1 ? '' : 's'}</div>`;
+  if (d === 0) return `<div class="conn" style="color:#ffb020;font-weight:700">Due today (${dstr})</div>`;
+  return `<div class="conn">Due ${dstr} · ${d} day${d === 1 ? '' : 's'} left</div>`;
 }
 function cycleWidgetHtml() {
   const admin = S.profile.role === 'ADMIN', has = S.cycles.length > 0;
@@ -16,14 +29,15 @@ function cycleWidgetHtml() {
     ${has ? `<select id="cyc-sel">${S.cycles.map(c => `<option value="${c.id}" ${c.id === S.cycleId ? 'selected' : ''}>${esc(c.name)}${c.status === 'ACTIVE' ? '' : ' (closed)'}</option>`).join('')}</select>` : '<div style="font-size:13px;color:#B7D4C6">No audit cycle yet.</div>'}
     <div class="two" ${admin ? '' : 'style="grid-template-columns:1fr"'}>${has ? '<button class="btn" id="cyc-load">Load</button>' : ''}${admin ? `<button class="btn new" id="cyc-new">+ New</button>` : ''}</div>
     ${admin && has ? '<div class="rowb"><button class="btn clo" id="cyc-close">Close cycle</button><button class="btn del" id="cyc-del">Delete cycle</button></div>' : ''}
-    ${S.cycleId ? `<div class="conn">Connected to “${esc(S.cycleName)}”</div><div class="prog"><span>Audit progress</span><b id="cp-pct">…</b></div><div class="bar2"><i id="cp-bar" style="width:0%"></i></div><small id="cp-txt">Loading…</small>` : ''}</div>`;
+    ${S.cycleId ? `<div class="conn">Connected to “${esc(S.cycleName)}”</div>${deadlineChip()}<div class="prog"><span>Audit progress</span><b id="cp-pct">…</b></div><div class="bar2"><i id="cp-bar" style="width:0%"></i></div><small id="cp-txt">Loading…</small>` : ''}</div>`;
 }
 async function refreshProgress() {
   if (!S.cycleId) return;
   const { data } = await sb.rpc('cycle_progress', { p_cycle: S.cycleId });
   const pct = data && data.total ? Math.round(100 * data.completed / data.total) : 0; S.progress = data;
   const a = document.getElementById('cp-pct'), b = document.getElementById('cp-bar'), c = document.getElementById('cp-txt');
-  if (a) a.textContent = pct + '%'; if (b) b.style.width = pct + '%'; if (c) c.textContent = data ? `${data.completed} / ${data.total} stores completed` : '';
+  if (a) a.textContent = pct + '%'; if (b) b.style.width = pct + '%';
+  if (c) c.textContent = data ? `${data.completed} / ${data.total} stores completed${data.overdue ? ` · ${data.overdue} overdue` : ''}` : '';
 }
 async function purgeCycleFiles(cycleId) {   // original Excel backups of the cycle's base stock
   try {
@@ -36,6 +50,7 @@ function wireCycle() {
   const $ = id => document.getElementById(id);
   if ($('cyc-load')) $('cyc-load').onclick = () => { applyCycle($('cyc-sel').value); S.shellUser = null; route(); };
   if ($('cyc-new')) $('cyc-new').onclick = () => openModal('Create new audit cycle', `<p class="muted">Every store takes part. The new cycle becomes the current cycle for all store users, and the previous cycle is closed (its data stays until you delete it).</p>
+      <p class="muted">Stores get <b>3 days</b> from creation to complete their audits — the deadline is set automatically.</p>
       <label>Cycle name</label><input id="m_cname" placeholder="e.g. OCT-2026" autocomplete="off">`, [cancelBtn,
       { label: 'Create cycle', cls: 'primary', fn: async () => { const n = document.getElementById('m_cname').value.trim(); if (n.length < 2) { toast('Please enter a cycle name.', 'err'); return false; }
         const { data, error } = await sb.rpc('admin_create_cycle', { p_name: n }); if (error) throw error; await loadCycles(); applyCycle(data); toast('Cycle created.', 'ok'); S.shellUser = null; route(); } }]);

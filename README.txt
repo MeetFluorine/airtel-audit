@@ -1,3 +1,67 @@
+=====================================================================
+Shadowfax Airtel Store Audit Tracker
+=====================================================================
+Live app : https://meetfluorine.github.io/airtel-audit
+Repo     : https://github.com/MeetFluorine/airtel-audit
+
+WHAT IT IS
+  Physical stock audit app for Airtel stores run by Shadowfax. Store teams
+  count serialized stock (barcode scan) and non-serialized stock against an
+  uploaded base file; the app reconciles expected vs physical, scores each
+  store (match rate + participation points) and ranks stores and circles.
+
+WHO USES IT
+  Store User   - uploads base data once (frozen after), scans/counts stock,
+                 previews, submits and locks the audit. Sees only own store.
+  Circle Head  - dashboards, results, rankings and reports for their circles.
+  Admin        - everything: users, stores, circles, cycles, base data,
+                 reports, audit logs.
+
+TECH
+  Frontend: static site - HTML, CSS, vanilla JavaScript. No build step, no
+            framework; host it anywhere static (GitHub Pages, Netlify...).
+  Backend:  Supabase - Postgres with Row Level Security on everything, Auth,
+            Storage (base-stock Excel backups). The public anon key lives in
+            js/supabase.js; all permission checks run in SECURITY DEFINER
+            Postgres functions, never in the browser.
+
+SETUP
+  1) In the Supabase SQL editor run database/*.sql in numeric order, once
+     each (every file is safe to re-run). Skip 02_seed_and_tests.sql on a
+     real project - it is demo data. Run 21 before 22.
+  2) Serve this folder with any static host. No server code to deploy.
+
+CHANGELOG (newest first)
+---------------------------------------------------------------------
+
+---- Layout fixes: ranking cards, result summary ----
+No SQL. Changed: css/global.css, css/result-table.css, js/audit.js.
+Ranking page: the five stat cards now stretch to fill the full row width (grid auto-fit instead of auto-fill).
+Result page summary card (v5, per mockup): restructured - top row has the donut (130px, vertically centered) beside the four KPIs in one horizontal row; ALL pills sit in ONE single row spanning the full card width from the left edge (no longer confined to the right column, no second row). Compact pill styling: smaller padding, 15px icons, bold numbers. Overall card height reduced.
+
+---- 3-day audit deadlines with escalation ----
+1) Run database/22_audit_deadlines.sql once in the Supabase SQL editor (after 21; safe to re-run).
+2) Changed: database/22_audit_deadlines.sql (new), js/cycle.js, js/audit.js, js/dashboard.js, js/reports.js.
+Rule: every audit cycle gets a deadline 3 days after creation (stamped automatically; existing cycles backfilled as created_at + 3 days).
+Escalation surfaces:
+  Store user dashboard: banner - "X days left" (info), "Due today/tomorrow" (warning), "Overdue by X days" (red). Hidden once submitted.
+  Sidebar: cycle widget shows "Due <date> - N days left" / overdue; progress line shows "N overdue".
+  Staff dashboard: red "Overdue" badge on pending stores + a new "Overdue" tab with count.
+  Store Status report: new "Deadline" and "Days Left" columns (negative = days overdue).
+Creating a cycle tells the admin stores get 3 days. Nothing is auto-locked at the deadline - it is enforced by visibility, so no audit is ever lost.
+
+---- New report types + Generate Report modal ----
+1) Run database/21_new_reports.sql once in the Supabase SQL editor (safe to re-run; it replaces the report_rows function, keeping all existing reports working).
+2) Changed: database/21_new_reports.sql (new), js/reports.js.
+Reports page: a "Generate Report" button (top right) opens a modal like the mockup - pick a report type from a grouped dropdown, set Circle / Store, then Generate & Download. Store Audit Report needs a store, Circle Shortage Report needs a circle (the modal and the preview both say so).
+New report types (all download as .xlsx, previewable, scope-safe: a Circle Head only ever gets their own circles):
+  Store Audit Report - one store's full reconciliation: overview + variance, every line (matched, short, excess) split by Serialized / Non-Serialized, with an In-Transit flag.
+  Circle Shortage Report - shortage lines only, store-wise, for the selected circle.
+  Pan-India Audit Overview - one row per store for the cycle: expected / physical / matched / short (split into in-transit, other, serialized, non-serialized) / excess / match rate / status.
+  Store Audit Status - who completed and who is pending: Completed / In Progress / Not Started per store, with version, started/submitted times and match rate.
+  User Report (Active / Inactive PAN India) - every user: contact, role, store / circles, approval status.
+Tabs reorganised: Audit Reports (Store Audit, Store Summary, Audit History), Variance Reports (+ Circle Shortage), Overview Reports (Pan-India, Store Status, Circle Summary), User Reports, Audit Logs.
+
 ---- Centered tables ----
 No SQL. New css/table-center.css (+ 1 link in index.html, loaded last): headings and values are centered in every table (admin and circle head lists, dashboards, result table, ranking tables, checklist, recent scans). Other text keeps its alignment.
 

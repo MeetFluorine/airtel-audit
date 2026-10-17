@@ -9,8 +9,26 @@ const REPORTS = {
   serial: { title: 'Serialized Variance', desc: 'Missing and unlisted serial numbers', variance: true, get head() { return REPORTS.variance.head; } },
   nonserial: { title: 'Non-Serialized Variance', desc: 'Short and excess quantities by item', variance: true, get head() { return REPORTS.variance.head; } },
   history: { title: 'Audit History', desc: 'Every audit version, including reopens and reasons',
-    head: ['Audit Cycle', 'Circle', 'Store', 'Version', 'Status', 'Started By', 'Started At', 'Submitted By', 'Submitted At', 'Reopened By', 'Reopened At', 'Reopen Reason'] }
+    head: ['Audit Cycle', 'Circle', 'Store', 'Version', 'Status', 'Started By', 'Started At', 'Submitted By', 'Submitted At', 'Reopened By', 'Reopened At', 'Reopen Reason'] },
+  store_audit: { title: 'Store Audit Report', desc: 'One store, full reconciliation: overview + variance. Every line (matched, short, excess) split by Serialized / Non-Serialized, with an In-Transit flag', need: 'store',
+    head: ['Audit Cycle', 'Circle', 'Store Code', 'Store Name', 'Item Code', 'Item Description', 'Inventory Status', 'UOM', 'Quality', 'Type', 'Serial No', 'Expected Qty', 'Physical Qty', 'Matched Qty', 'Short Qty', 'Excess Qty', 'Result', 'In Transit', 'Audit Date', 'Submitted By'] },
+  circle_shortage: { title: 'Circle Shortage Report', desc: 'Shortage lines only, store-wise, for one circle', need: 'circle',
+    head: ['Audit Cycle', 'Circle', 'Store Code', 'Store Name', 'Item Code', 'Item Description', 'Inventory Status', 'Type', 'Serial No', 'Expected Qty', 'Physical Qty', 'Short Qty', 'In Transit', 'Audit Date'] },
+  pan_india: { title: 'Pan-India Audit Overview', desc: 'One row per store for the cycle: expected / physical / matched / short (in-transit, other, serialized, non-serialized splits) / excess / match rate',
+    head: ['Audit Cycle', 'Circle', 'Store Code', 'Store Name', 'Expected Units', 'Physical Units', 'Matched Units', 'Short Units', 'Short In Transit', 'Short Other', 'Short Serialized', 'Short Non-Serialized', 'Excess Units', 'Match Rate %', 'Audit Status', 'Submitted By'] },
+  store_status: { title: 'Store Audit Status', desc: 'Who completed the audit and who is pending: status, version, timestamps and deadline per store',
+    head: ['Audit Cycle', 'Circle', 'Store Code', 'Store Name', 'Audit Status', 'Version', 'Started At', 'Submitted At', 'Submitted By', 'Match Rate %', 'Deadline', 'Days Left'] },
+  users: { title: 'User Report (Active / Inactive PAN India)', desc: 'Every user: contact, role, store / circles and approval status',
+    head: ['Full Name', 'Employee ID', 'Email', 'Mobile', 'Role', 'Status', 'Store Code', 'Circles', 'Registered On'] },
 };
+const GEN_GROUPS = [
+  ['Store Reports', ['store_audit', 'store_status']],
+  ['Circle Reports', ['circle_shortage']],
+  ['Overview Reports', ['pan_india', 'circle_summary', 'store_summary']],
+  ['Variance Reports', ['variance', 'serial', 'nonserial']],
+  ['Audit Reports', ['history']],
+  ['User Reports', ['users']],
+];
 const LOG_LBL = Object.assign({}, EVT, { LOGIN: 'Login', USER_APPROVED: 'User approved', USER_REJECTED: 'User rejected', USER_STORE_CHANGED: 'User store changed', REPORT_EXPORTED: 'Report exported',
   STORE_REPORT_NAME_SET: 'Store report name set', BASE_UPLOAD_WARNING: 'Base upload warning', CYCLE_DELETED: 'Cycle deleted', CYCLE_CLOSED: 'Cycle closed', USER_DELETED: 'User deleted' });
 const slug = s => String(s || '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
@@ -37,25 +55,63 @@ async function downloadReport(rep, cycleId, circleId, storeId, inc, msgEl) {
 PAGES.reports = async el => {
   if (staffOnly(el)) return; if (!S.cycleId) return noCycle(el);
   const [circles, stores] = await Promise.all([getCircles(), getStores()]);
-  const TABS = { audit: ['Audit Reports', ['store_summary', 'history']], variance: ['Variance Reports', ['variance', 'serial', 'nonserial']], perf: ['Store Performance', ['circle_summary', 'store_summary']], activity: ['User Activity', null] };
-  const st = { tab: 'audit', rep: 'store_summary', circle: '', store: '', inc: false, page: 0 }; const PS = 50, cid = S.cycleId;
-  el.innerHTML = `<div class="tabs seg" id="rtabs" style="margin-bottom:12px">${Object.entries(TABS).map(([k, v]) => `<button class="tab" data-tab="${k}">${v[0]}</button>`).join('')}</div><div id="panel"></div>`;
+  const TABS = { audit: ['Audit Reports', ['store_audit', 'store_summary', 'history']], variance: ['Variance Reports', ['variance', 'serial', 'nonserial', 'circle_shortage']],
+    overview: ['Overview Reports', ['pan_india', 'store_status', 'circle_summary']], users: ['User Reports', ['users']], activity: ['Audit Logs', null] };
+  const st = { tab: 'audit', rep: 'store_audit', circle: '', store: '', inc: false, page: 0 }; const PS = 50, cid = S.cycleId;
+  el.innerHTML = `<div class="bar" style="margin-bottom:12px"><span></span><button class="btn yel" id="genrep">${ic('plus', 16)} Generate Report</button></div>
+    <div class="tabs seg" id="rtabs" style="margin-bottom:12px">${Object.entries(TABS).map(([k, v]) => `<button class="tab" data-tab="${k}">${v[0]}</button>`).join('')}</div><div id="panel"></div>`;
   const $ = id => el.querySelector('#' + id);
   const args = (off, lim, exp) => ({ p_report: st.rep, p_cycle: cid, p_circle: st.circle || null, p_store: st.store || null, p_include_matched: !!(REPORTS[st.rep].variance && st.inc), p_offset: off, p_limit: lim, p_export: !!exp });
-  function storeOptions() { const l = stores.filter(s => !st.circle || s.circle_id === st.circle); return '<option value="">All stores</option>' + l.map(s => `<option value="${s.id}" ${s.id === st.store ? 'selected' : ''}>${esc(s.circles?.code || '')} · ${esc(s.name)} (${esc(s.code)})</option>`).join(''); }
+  function storeOptions(sel, onlyCircle) { const l = stores.filter(s => !onlyCircle || s.circle_id === onlyCircle); return '<option value="">All stores</option>' + l.map(s => `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${esc(s.circles?.code || '')} · ${esc(s.name)} (${esc(s.code)})</option>`).join(''); }
+
+  // "Generate Report" modal: pick a report type, set its filters, download the Excel.
+  function genModal() {
+    const opts = GEN_GROUPS.map(([g, ks]) => `<optgroup label="${g}">${ks.map(k => `<option value="${k}">${REPORTS[k].title}</option>`).join('')}</optgroup>`).join('');
+    const o = openModal('Generate Report', `
+      <div class="fld"><label for="gr-type">Select Report Type</label><div class="inp"><select id="gr-type">${opts}</select></div></div>
+      <p class="muted" id="gr-desc" style="margin:6px 0 12px"></p>
+      <div class="row2"><div class="fld"><label for="gr-ci">Circle</label><div class="inp"><select id="gr-ci"><option value="">All my circles</option>${circles.map(c => `<option value="${c.id}">${esc(c.code)}</option>`).join('')}</select></div></div>
+      <div class="fld"><label for="gr-st">Store</label><div class="inp"><select id="gr-st"></select></div></div></div>
+      <label class="chk" id="gr-incw"><input type="checkbox" id="gr-inc"> Also include matched records</label>
+      <div class="alert err" id="gr-err" hidden></div><div id="gr-msg" class="muted"></div>`,
+      [{ label: 'Cancel' }, { label: 'Generate & Download', cls: 'yel', fn: async () => {
+        const rep = o.querySelector('#gr-type').value, ci = o.querySelector('#gr-ci').value, sti = o.querySelector('#gr-st').value;
+        const need = REPORTS[rep].need, errEl = o.querySelector('#gr-err');
+        const bad = m => { errEl.textContent = m; errEl.hidden = false; };
+        if (need === 'store' && !sti) { bad('Please select a store for the Store Audit Report.'); return false; }
+        if (need === 'circle' && !ci) { bad('Please select a circle for the Circle Shortage Report.'); return false; }
+        errEl.hidden = true;
+        await downloadReport(rep, cid, ci || null, sti || null, o.querySelector('#gr-inc').checked, o.querySelector('#gr-msg'));
+      } }]);
+    const q = s => o.querySelector(s);
+    const sync = () => {
+      const R = REPORTS[q('#gr-type').value];
+      q('#gr-desc').textContent = R.desc;
+      q('#gr-st').innerHTML = storeOptions(q('#gr-st').value, q('#gr-ci').value);
+      q('#gr-incw').hidden = !R.variance;
+    };
+    q('#gr-type').onchange = sync; q('#gr-ci').onchange = () => { q('#gr-st').innerHTML = storeOptions('', q('#gr-ci').value); };
+    q('#gr-st').innerHTML = storeOptions('', '');
+    sync();
+  }
+  $('genrep').onclick = genModal;
   async function panel() {
     el.querySelectorAll('#rtabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab));
     if (st.tab === 'activity') { await logsView($('panel'), ''); return; }
     const kids = TABS[st.tab][1]; if (!kids.includes(st.rep)) { st.rep = kids[0]; st.page = 0; }
     $('panel').innerHTML = `<div class="card" style="padding:16px;margin-bottom:14px"><div class="filters"><div><label>Audit cycle</label><div class="chip-i" style="padding:9px 12px">${ic('cal', 16)}<b style="font-size:14px">${esc(S.cycleName)}</b></div></div>
-        <div><label>Circle</label><select id="f_ci"><option value="">All my circles</option>${circles.map(c => `<option value="${c.id}" ${c.id === st.circle ? 'selected' : ''}>${esc(c.code)}</option>`).join('')}</select></div><div><label>Store</label><select id="f_st">${storeOptions()}</select></div>
+        <div><label>Circle</label><select id="f_ci"><option value="">All my circles</option>${circles.map(c => `<option value="${c.id}" ${c.id === st.circle ? 'selected' : ''}>${esc(c.code)}</option>`).join('')}</select></div><div><label>Store</label><select id="f_st">${storeOptions(st.store, st.circle)}</select></div>
         <label class="chk" id="incw" ${kids.some(k => REPORTS[k].variance) ? '' : 'hidden'}><input type="checkbox" id="f_inc" ${st.inc ? 'checked' : ''}> Also include matched records</label></div><span id="dlmsg" class="muted"></span></div>
       <div class="card" style="padding:0">${kids.map(k => `<div class="reprow"><b><span class="tile">${ic('file', 18)}</span>${REPORTS[k].title}</b><span class="muted">${REPORTS[k].desc}</span><span>${badge('Ready', 'ok')}</span>
         <span class="row"><button class="btn sm ${k === st.rep ? 'on' : ''}" data-prev="${k}">Preview</button><button class="btn sm yel" data-dl="${k}">${ic('dl', 14)} Download</button></span></div>`).join('')}</div><div id="prev" style="margin-top:14px"></div>`;
     await preview();
   }
   async function preview() {
-    const R = REPORTS[st.rep]; $('prev').innerHTML = '<div class="boot">Loading preview…</div>';
+    const R = REPORTS[st.rep];
+    const needMsg = R.need === 'store' && !st.store ? 'Select a store above to preview the Store Audit Report.'
+      : R.need === 'circle' && !st.circle ? 'Select a circle above to preview the Circle Shortage Report.' : '';
+    if (needMsg) { $('prev').innerHTML = `<div class="alert info">${needMsg}</div>`; return; }
+    $('prev').innerHTML = '<div class="boot">Loading preview…</div>';
     const { data, error } = await sb.rpc('report_rows', args(st.page * PS, PS, false)); if (error) { $('prev').innerHTML = `<div class="alert err">${esc(rpcMsg(error))}</div>`; return; }
     $('prev').innerHTML = `<div class="bar"><b>Preview: ${R.title}</b><span class="muted">${fn(data.total)} row(s)${R.variance ? (st.inc ? ' · full reconciliation' : ' · exceptions only') : ''}</span></div>` + tbl(R.head, data.rows.map(r => '<tr>' + R.head.map(h => `<td>${r[h] == null ? '' : esc(r[h])}</td>`).join('') + '</tr>').join(''))
       + `<div class="bar"><span class="muted">Showing ${data.rows.length ? st.page * PS + 1 : 0}–${st.page * PS + data.rows.length}</span><div class="row"><button class="btn sm" data-pg="-1" ${st.page ? '' : 'disabled'}>Previous</button><button class="btn sm" data-pg="1" ${(st.page + 1) * PS < data.total ? '' : 'disabled'}>Next</button></div></div>`;

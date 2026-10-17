@@ -3,20 +3,21 @@
 .resfit .rhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap}
 .rhead .rh1{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.rhead h1{margin:0;font-size:22px}.rhead .rmeta{color:#6B7B75;font-size:13.5px}
 
-/* summary card: donut | Expected / Found / Short / Excess, then the pills */
-.rsum2{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 26px;align-items:center;padding:18px 26px;margin-bottom:16px}
+/* summary card: top row (donut | Expected / Found / Short / Excess), then one full-width pill row */
+.rsum2{display:block;padding:16px 24px;margin-bottom:16px}
+.rtop{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 26px;align-items:center}
 .rsum2 .rdon{display:flex}
-.rsum2 .rright{min-width:0}
 .rstats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:center}
-.rst{display:flex;align-items:center;gap:14px;padding:6px 22px;border-left:1px solid #E6EEEA;min-width:0}.rst:first-child{border-left:0;padding-left:0}
-.rst small{display:block;font-size:13px;font-weight:600;color:#44564F;text-transform:uppercase;letter-spacing:.3px}
-.rst b{display:block;font-size:32px;line-height:1.15;font-weight:800;color:#0F1F1A}
+.rst{display:flex;align-items:center;gap:10px;padding:4px 14px;border-left:1px solid #E6EEEA;min-width:0}.rst:first-child{border-left:0;padding-left:0}
+.rst small{display:block;font-size:12px;font-weight:600;color:#44564F;text-transform:uppercase;letter-spacing:.3px}
+.rst b{display:block;font-size:26px;line-height:1.15;font-weight:800;color:#0F1F1A}
 .rst b.g{color:#0F7A3C}.rst b.r{color:#E5173F}.rst b.y{color:#C27A00}
-.rst em{display:block;font-style:normal;font-size:13px;color:#44564F;margin-top:3px}
-.ric{width:56px;height:56px;border-radius:16px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:#EEF1F5;color:#3B4A63}
+.rst em{display:block;font-style:normal;font-size:12.5px;color:#44564F;margin-top:2px;white-space:nowrap}
+.ric{width:46px;height:46px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:#EEF1F5;color:#3B4A63}
 .ric.g{background:#DDF4E6;color:#0F7A3C}.ric.r{background:#FFE3E6;color:#E5173F}.ric.y{background:#FFEFD0;color:#C27A00}
-.rpills{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid #E6EEEA}
-.pl{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:9px 16px;font-size:14px;color:#26382F}.pl b{font-size:15px;font-weight:800;margin:0 1px}
+.rpills{display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}
+.pl{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:7px 13px;font-size:13px;color:#26382F;white-space:nowrap}.pl b{font-size:15px;font-weight:800;margin:0 1px}
+.pl svg{flex-shrink:0}
 .pl.g{background:#E4F6EA}.pl.r{background:#FFE6E8}.pl.y{background:#FFF1D6}.pl.b{background:#E6EEFF}.pl.b b{color:#1D4FD8}.pl.p{background:#F0E8FF}.pl.p b{color:#6D2BD9}.pl.n{background:#EEF1F4}
 .pl.g svg{color:#0F7A3C}.pl.r svg{color:#E5173F}.pl.y svg{color:#C27A00}.pl.b svg{color:#1D4FD8}.pl.p svg{color:#6D2BD9}
 
@@ -72,7 +73,7 @@
 .shsplit{display:block;font-size:11.5px;font-weight:600;color:#6B7B75;margin-top:2px;line-height:1.3}
 
 /* narrower screens: smaller figures; phones may scroll the table sideways as a last resort */
-@media(max-width:1250px){.rst{padding:6px 14px;gap:10px}.rst b{font-size:26px}.ric{width:46px;height:46px}.resfit .rtbl td{font-size:13px;padding:13px 4px}.resfit .rtbl th{font-size:11.5px;padding:13px 4px}
+@media(max-width:1250px){.resfit .rtbl td{font-size:13px;padding:13px 4px}.resfit .rtbl th{font-size:11.5px;padding:13px 4px}
   .thf .lf{display:none}.thf .ls{display:inline}.cf{padding:2px}.resfit .rtbl .ib{font-size:12px;padding:4px 7px}.resfit .rtbl td.sno{font-size:12px}}
-@media(max-width:1000px){.rsum2{grid-template-columns:1fr;justify-items:center}.rstats{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.rst,.rst:first-child{border-left:0;padding:6px 8px}
+@media(max-width:1000px){.rtop{grid-template-columns:1fr;justify-items:center}.rstats{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.rst,.rst:first-child{border-left:0;padding:6px 8px}.rpills{flex-wrap:wrap;justify-content:flex-start}
   .resfit .tw{overflow-x:auto}.resfit .rtbl{min-width:980px}}
