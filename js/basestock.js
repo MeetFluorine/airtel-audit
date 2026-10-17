@@ -2,10 +2,12 @@
 const BS_REQUIRED = ['item_code', 'inventory_status', 'item_description', 'item_qnty', 'item_quality', 'item_sno'];
 const bsNorm = s => String(s ?? '').trim().toLowerCase().replace(/[\s.]+/g, '_');
 const bsStr = v => String(v ?? '').trim();
+// rows of these sub-stores are dropped from every base stock upload (compared case-insensitively, spaces/dots ignored). Add more names here if needed.
+const BS_SKIP_SUBSTORES = ['raj_ss_temp'];
 
 // raw = array of row objects from SheetJS (first sheet, header row = keys)
 function bsValidate(raw) {
-  const out = { total: 0, valid: [], errors: [], dupSerial: 0, blankCode: 0, badQty: 0, ser: 0, non: 0, names: [], missing: [], warnings: [] };
+  const out = { total: 0, valid: [], errors: [], dupSerial: 0, blankCode: 0, badQty: 0, ser: 0, non: 0, names: [], missing: [], warnings: [], skipped: 0 };
   if (!raw.length) { out.missing = ['(no data rows found)']; return out; }
   const map = {}; Object.keys(raw[0]).forEach(k => { map[bsNorm(k)] = k; });
   out.missing = BS_REQUIRED.filter(h => !map[h]);
@@ -15,9 +17,11 @@ function bsValidate(raw) {
   raw.forEach((r, i) => {
     const row = i + 2, v = k => (map[k] ? r[map[k]] : '');
     if (Object.values(r).every(x => bsStr(x) === '')) return;           // fully empty row: ignore silently
+    const sub = bsStr(v('substore_name'));
+    if (sub && BS_SKIP_SUBSTORES.includes(bsNorm(sub))) { out.skipped++; return; }      // e.g. Raj_SS_Temp: removed before any other check, never counted or compared
     out.total++;
     const sn = bsStr(v('item_sno')).toUpperCase() || null, code = bsStr(v('item_code')), qraw = v('item_qnty');
-    const sub = bsStr(v('substore_name')); if (sub) names.add(sub);
+    if (sub) names.add(sub);
     const err = issue => { out.errors.push({ row, issue, code, sno: sn || '' }); };
     if (!code) { out.blankCode++; return err('Blank Item_Code'); }
     const q = typeof qraw === 'number' ? qraw : Number(bsStr(qraw).replace(/,/g, ''));
@@ -135,7 +139,7 @@ if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
     const r = st.res, cyc = cy.data.find(c => c.id === st.cycle);
     const k = (l, v, c = '') => `<div class="${c}"><span>${l}</span><b>${v}</b></div>`;
     $('s4').innerHTML = `<div class="card sec"><div class="step">4</div><b>Validation result</b>
-      <div class="kv">${k('Selected store', esc(store.name))}${k('Circle', esc(store.circles?.code || ''))}${k('Audit cycle', esc(cyc.name))}${k('Rows in file', r.total.toLocaleString())}${k('Valid rows', r.valid.length.toLocaleString(), 'g')}
+      <div class="kv">${k('Selected store', esc(store.name))}${k('Circle', esc(store.circles?.code || ''))}${k('Audit cycle', esc(cyc.name))}${k('Rows in file', r.total.toLocaleString())}${r.skipped ? k('Raj_SS_Temp removed', r.skipped.toLocaleString()) : ''}${k('Valid rows', r.valid.length.toLocaleString(), 'g')}
         ${k('Serialized items', r.ser.toLocaleString())}${k('Non-serialized rows', r.non.toLocaleString())}${k('Errors', r.errors.length, r.errors.length ? 'r' : '')}${k('Duplicate serials', r.dupSerial, r.dupSerial ? 'r' : '')}${k('Blank Item Code', r.blankCode, r.blankCode ? 'r' : '')}${k('Invalid quantity', r.badQty, r.badQty ? 'r' : '')}</div>
       ${r.warnings.slice(0, 5).map(w => `<div class="alert warn">${esc(w)}</div>`).join('')}
       ${r.errors.length ? `<details open><summary>${r.errors.length} row(s) with errors (they will NOT be imported)</summary>${tbl(['Excel row', 'Issue', 'Item code', 'Serial'], r.errors.slice(0, 200).map(x => `<tr><td>${x.row}</td><td>${esc(x.issue)}</td><td>${esc(x.code)}</td><td>${esc(x.sno)}</td></tr>`).join(''))}${r.errors.length > 200 ? '<p class="muted">Showing the first 200.</p>' : ''}</details>

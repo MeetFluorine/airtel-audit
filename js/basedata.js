@@ -59,7 +59,7 @@ PAGES.basedata = async el => {
   function summary() {
     const r = st.res, c = cur(), k = (l, v, cl = '') => `<div class="${cl}"><span>${l}</span><b>${v}</b></div>`, bad = r.errors.length > 0;
     $('bd-s3').innerHTML = `<div class="card sec"><div class="step">3</div><b>Validation result</b>
-      <div class="kv">${k('Audit cycle', esc(c.name))}${k('Rows in file', r.total.toLocaleString())}${k('Valid rows', r.valid.length.toLocaleString(), 'g')}${k('Serialized items', r.ser.toLocaleString())}${k('Non-serialized rows', r.non.toLocaleString())}
+      <div class="kv">${k('Audit cycle', esc(c.name))}${k('Rows in file', r.total.toLocaleString())}${r.skipped ? k('Raj_SS_Temp removed', r.skipped.toLocaleString()) : ''}${k('Valid rows', r.valid.length.toLocaleString(), 'g')}${k('Serialized items', r.ser.toLocaleString())}${k('Non-serialized rows', r.non.toLocaleString())}
         ${k('Errors', r.errors.length, bad ? 'r' : '')}${k('Duplicate serials', r.dupSerial, r.dupSerial ? 'r' : '')}${k('Blank Item Code', r.blankCode, r.blankCode ? 'r' : '')}${k('Invalid quantity', r.badQty, r.badQty ? 'r' : '')}</div>
       ${r.warnings.slice(0, 5).map(w => `<div class="alert warn">${esc(w)}</div>`).join('')}
       ${bad ? `<div class="alert err"><b>Fix these rows in your file and upload it again.</b> Base data cannot be saved while it has errors.</div><details open><summary>${r.errors.length} row(s) with errors</summary>${tbl(['Excel row', 'Issue', 'Item code', 'Serial'], r.errors.slice(0, 200).map(x => `<tr><td>${x.row}</td><td>${esc(x.issue)}</td><td>${esc(x.code)}</td><td>${esc(x.sno)}</td></tr>`).join(''))}${r.errors.length > 200 ? '<p class="muted">Showing the first 200.</p>' : ''}</details>` : ''}

@@ -2,6 +2,7 @@
 // and the Admin / Circle Head store view. Usage:
 //   const CF = colFilters([{ k: 'item_code', l: 'Item_Code', t: 'list' }, ...], valuesFromRpc, () => reloadTable());
 //   header cell: CF.th('item_code')      query: qb = CF.apply(qb)      chips: CF.chips(boxEl)      clicks: if (CF.handle(e)) return;
+// Already-loaded rows (no server query): rows.filter(CF.test), columns may give get: row => value.
 // column: k = key, l = label, t = 'list' | 'text' | 'num', col = database column if different from k, vals = fixed list of values, lab = value labels.
 // A 'list' column without any values (database/19 not installed) quietly becomes a "contains" box. 'variance' = physical - expected.
 function colFilters(cols, fv, onChange) {
@@ -11,7 +12,8 @@ function colFilters(cols, fv, onChange) {
   const vlabel = (c, v) => v === '' ? '(Blank)' : c.lab && c.lab[v] != null ? c.lab[v] : c.k === 'result' ? (RL[v] || v) : v;
   const FUN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>';
   const quote = v => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-  const th = (k, label) => { const c = byK(k); return `<span class="thf">${label || esc(c.l)}<button type="button" class="cf ${F[k] ? 'on' : ''}" data-cf="${k}" aria-label="Filter ${esc(c.l)}" title="Filter ${esc(c.l)}">${FUN}</button></span>`; };
+  const btn = k => { const c = byK(k); return `<button type="button" class="cf ${F[k] ? 'on' : ''}" data-cf="${k}" aria-label="Filter ${esc(c.l)}" title="Filter ${esc(c.l)}">${FUN}</button>`; };
+  const th = (k, label) => `<span class="thf">${label || esc(byK(k).l)}${btn(k)}</span>`;
 
   function apply(qb) {
     for (const [k, f] of Object.entries(F)) {
@@ -67,5 +69,15 @@ function colFilters(cols, fv, onChange) {
     if (rm) { if (rm.dataset.rm === '*') Object.keys(F).forEach(k => delete F[k]); else delete F[rm.dataset.rm]; onChange(); return true; }
     return false;
   }
-  return { F, th, apply, chips, handle, close };
+  // client-side version of apply(): does this already-loaded row pass every active filter? (column may give get: row => value)
+  function test(row) {
+    for (const [k, f] of Object.entries(F)) {
+      const c = byK(k), v = c.get ? c.get(row) : row[c.col || c.k];
+      if (f.in) { if (!f.in.includes(v == null ? '' : String(v))) return false; }
+      else if (f.like) { if (!String(v ?? '').toLowerCase().includes(f.like.toLowerCase())) return false; }
+      else { const n = Number(v); if (v == null || v === '' || isNaN(n)) return false; if (f.min != null && n < f.min) return false; if (f.max != null && n > f.max) return false; }
+    }
+    return true;
+  }
+  return { F, th, btn, apply, test, chips, handle, close };
 }

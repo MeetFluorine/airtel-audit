@@ -1,0 +1,12 @@
+/* Every table in the app: headings and values centred (tables only; other text keeps its alignment). Loaded last so it wins. */
+.tbl th,.tbl td,
+.dsh-t th,.dsh-t td,
+.ckt2 th,.ckt2 td,
+.rtab th,.rtab td,
+.resfit .rtbl th,.resfit .rtbl td,
+.rkw .rkt th,.rkw .rkt td{text-align:center;vertical-align:middle}
+/* things that sit inside a table cell */
+.tbl td .row,.dsh-t td .row,.resfit .rtbl td .row{justify-content:center}
+.resfit .rtbl .rmk{text-align:center}
+.resfit .rtbl .rmkr{text-align:center}
+.resfit .rtbl .clamp{text-align:center}

@@ -1,3 +1,22 @@
+---- Centered tables ----
+No SQL. New css/table-center.css (+ 1 link in index.html, loaded last): headings and values are centered in every table (admin and circle head lists, dashboards, result table, ranking tables, checklist, recent scans). Other text keeps its alignment.
+
+---- Ranking page polish ----
+No SQL. Changed: js/ranking.js, css/ranking.css.
+Ranking tables (Stores, Circles): sorting only (click a heading: A to Z / Z to A, low to high / high to low, third click clears); the column filter funnels are removed.
+Columns use percentage widths and wrap, so the tables fit the page with no sideways scrolling (phones under 1000px may still scroll).
+Top store of each circle: compact cards, ordered by the store's all-India rank (best first; ties by circle rank, then circle name).
+
+---- Raj_SS_Temp filter, gap-free ranking, sortable ranking tables, new top-store card ----
+1) Re-run database/18_ranking.sql in the Supabase SQL editor (safe to re-run). No other SQL.
+2) Changed: database/18_ranking.sql, js/basestock.js, js/basedata.js, js/colfilter.js, js/ranking.js, css/ranking.css.
+Base data upload: every row whose Substore_Name is Raj_SS_Temp (any case) is dropped before any other check (never counted, never a duplicate, ignored by the store-name check).
+  The validation screen shows "Raj_SS_Temp removed N". To drop more sub-stores, add them to BS_SKIP_SUBSTORES at the top of js/basestock.js.
+Ranking numbers: dense ranking 1, 2, 3 (two stores sharing rank 1 -> next is rank 2). Order = total points, then lowest shortage %
+  (other-status shortage / total expected qty) at full precision, so near-equal stores are separated. Only an exact tie shares a rank.
+Ranking tables (stores and circles): click a heading to sort (A to Z / Z to A, low to high / high to low, third click clears); funnel in each heading filters.
+Top store of each circle: card with circle name, store, earned points, India rank and circle rank.
+
 ---- Store result page redesign (matches the approved mockup) ----
 No new SQL. Changed: js/audit.js (result page), js/colfilter.js (small label fix), css/result-table.css (rewritten).
 Summary card: donut with match rate, Expected / Found / Short (with In transit / Other split) / Excess, and coloured pills.

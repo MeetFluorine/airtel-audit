@@ -15,11 +15,12 @@
 -- IN-TRANSIT STOCK: nothing is removed from the audit data. Expected, short, excess and match rate stay exactly as audited.
 --   For RANKING ONLY the shortage is split in two: shortage on lines whose Inventory_Status contains "transit"
 --   (e.g. "In Transit (S2W)", these devices already left the store) and shortage on every other status.
---   Points use the matches against the OTHER-status shortage only:  match rate = matched / (matched + other-status shortage).
+--   Points use the matches against the OTHER-status shortage only:  match rate = matched / (matched + other-status shortage) (4 decimals, no early rounding).
 --   The ranking tables show both shortage figures separately. A matched in-transit line still counts as a match.
 --   To change the wording that identifies in-transit stock edit the ilike '%transit%' test in _store_rank() and rank_my_store().
 --
--- RANK: total points (high first); tie-break = lowest counted shortage % (other-status shortage only); equal on both = same rank.
+-- RANK: total points (high first); tie-break = lowest counted shortage %, i.e. other-status shortage / total expected qty (full precision).
+--   Ranks are numbered 1, 2, 3 with no gaps: if two stores share rank 1 the next store is rank 2 (not 3). Only an exact tie on both shares a rank.
 --   Store rank:  within its circle, and across all active stores in India.
 --   Circle rank: average points per active store of the circle (so big and small circles compare fairly).
 --
@@ -31,12 +32,12 @@
 
 create or replace function public._rank_points(p_expected numeric, p_matched numeric) returns numeric
 language sql immutable set search_path = '' as $$
-  select 20 + coalesce(round(100 * p_matched / nullif(p_expected, 0), 1), 0)
+  select 20 + coalesce(round(100 * p_matched / nullif(p_expected, 0), 4), 0)
 $$;
 
 -- one row per ACTIVE store with totals and ranks (internal: not callable from the app)
 -- short = all shortage as audited; short_transit = part of it on in-transit lines; short_other = the rest.
--- counted_short_pct = short_other / (expected - short_transit): the shortage % the ranking uses.
+-- counted_short_pct = short_other / expected (all expected qty): the shortage % the ranking uses as tie-break.
 drop function if exists public._store_rank();
 drop function if exists public._circle_rank();
 create or replace function public._store_rank() returns table(
@@ -63,13 +64,13 @@ language sql stable security definer set search_path = '' as $$
   ), base as (
     select s.id, s.code, s.name, c.id as circle_id, c.code as circle, coalesce(a.held, 0) as held, coalesce(a.done_n, 0) as done_n,
            coalesce(a.ex, 0) as ex, coalesce(a.ma, 0) as ma, coalesce(a.sh, 0) as sh, coalesce(a.trs, 0) as trs, coalesce(a.sh, 0) - coalesce(a.trs, 0) as oth,
-           case when coalesce(a.ex, 0) - coalesce(a.trs, 0) > 0 then round(100 * (a.sh - a.trs) / (a.ex - a.trs), 2) end as cpct, coalesce(a.pts, 0) as pts
+           case when coalesce(a.ex, 0) > 0 then round(100 * (a.sh - a.trs) / a.ex, 4) end as cpct, coalesce(a.pts, 0) as pts
       from public.stores s join public.circles c on c.id = s.circle_id left join agg a on a.sid = s.id
      where s.active
   )
   select id, code, name, circle_id, circle, held::int, done_n::int, ex, ma, sh, trs, oth, cpct, pts,
-         (rank() over (order by pts desc, cpct asc nulls last))::int, (count(*) over ())::int,
-         (rank() over (partition by circle_id order by pts desc, cpct asc nulls last))::int, (count(*) over (partition by circle_id))::int
+         (dense_rank() over (order by pts desc, cpct asc nulls last))::int, (count(*) over ())::int,
+         (dense_rank() over (partition by circle_id order by pts desc, cpct asc nulls last))::int, (count(*) over (partition by circle_id))::int
     from base
 $$;
 
@@ -80,13 +81,13 @@ create or replace function public._circle_rank() returns table(
 language sql stable security definer set search_path = '' as $$
   with g as (
     select circle_id, circle, count(*)::int as stores, sum(cycles_done)::int as done_n, sum(cycles_held)::int as held,
-           round(avg(points), 1) as avg_pts, sum(short) as sh, sum(short_transit) as trs, sum(short_other) as oth,
-           case when sum(expected) - sum(short_transit) > 0 then round(100 * sum(short_other) / (sum(expected) - sum(short_transit)), 2) end as cpct,
+           round(avg(points), 4) as avg_pts, sum(short) as sh, sum(short_transit) as trs, sum(short_other) as oth,
+           case when sum(expected) > 0 then round(100 * sum(short_other) / sum(expected), 4) end as cpct,
            case when sum(cycles_held) > 0 then round(100.0 * sum(cycles_done) / sum(cycles_held), 1) end as part_pct
       from public._store_rank() group by circle_id, circle
   )
   select circle_id, circle, stores, done_n, held, avg_pts, sh, trs, oth, cpct, part_pct,
-         (rank() over (order by avg_pts desc, cpct asc nulls last))::int, (count(*) over ())::int
+         (dense_rank() over (order by avg_pts desc, cpct asc nulls last))::int, (count(*) over ())::int
     from g
 $$;
 
@@ -104,7 +105,7 @@ begin
     'pan_rank', r.pan_rank, 'pan_total', r.pan_total, 'circle_rank', r.circle_rank, 'circle_total', r.circle_total,
     'cycles', (select coalesce(jsonb_agg(jsonb_build_object('name', c.name, 'status', c.status, 'done', ls.id is not null,
           'short', ls.short_units, 'short_transit', coalesce(tr.q, 0), 'short_other', ls.short_units - coalesce(tr.q, 0),
-          'match_rate', case when ls.id is not null and coalesce(ls.expected_units - coalesce(tr.q, 0), 0) > 0 then round(100 * ls.matched_units / (ls.expected_units - coalesce(tr.q, 0)), 1) end,
+          'match_rate', case when ls.id is not null and coalesce(ls.expected_units - coalesce(tr.q, 0), 0) > 0 then round(100 * ls.matched_units / (ls.expected_units - coalesce(tr.q, 0)), 2) end,
           'points', case when ls.id is not null then public._rank_points(ls.expected_units - coalesce(tr.q, 0), ls.matched_units) else 0 end) order by c.created_at desc), '[]'::jsonb)
         from public.audit_cycles c
         left join lateral (select x.* from public.audit_sessions x where x.audit_cycle_id = c.id and x.store_id = v_store and x.status = 'LOCKED' order by x.version desc limit 1) ls on true
