@@ -49,7 +49,16 @@ async function storeDash(el) {
   const cta = !c.cycle ? '<div class="alert warn" style="margin:0">No audit is open for your store yet. Set up your store\'s base data from <a href="#/basedata">Base Data</a> (or ask your administrator).</div>'
     : s && s.status === 'LOCKED' ? `<a class="btn yel xl" href="#/result">${ic('clip', 20)} View Result ${ic('arrow', 20)}</a>`
     : `<a class="btn yel xl" href="#/audit">${ic('play', 20)} ${s ? 'Continue Audit' : 'Start Audit'} ${ic('arrow', 20)}</a>`;
-  el.innerHTML = `<div class="hero2"><div><h1>${greet()}, ${esc(first)}! 👋</h1><p class="hp">Let's complete the physical stock audit<br>for your store.</p></div>
+  // 3-day deadline banner (escalation: info -> warn -> overdue)
+  let dlBanner = '';
+  if (c.cycle && c.cycle.deadline_at && !(s && s.status === 'LOCKED')) {
+    const days = Math.ceil((new Date(c.cycle.deadline_at) - Date.now()) / 864e5);
+    const dstr = new Date(c.cycle.deadline_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    dlBanner = days < 0 ? `<div class="alert err" style="margin:0 0 12px"><b>Overdue by ${-days} day${-days === 1 ? '' : 's'}.</b> The deadline was ${dstr}. Please submit your audit immediately.</div>`
+      : days <= 1 ? `<div class="alert warn" style="margin:0 0 12px"><b>${days === 0 ? 'Due today' : 'Due tomorrow'} (${dstr}).</b> Please complete and submit your audit.</div>`
+      : `<div class="alert info" style="margin:0 0 12px">Audit deadline: <b>${dstr}</b> (${days} days left).</div>`;
+  }
+  el.innerHTML = `${dlBanner}<div class="hero2"><div><h1>${greet()}, ${esc(first)}! 👋</h1><p class="hp">Let's complete the physical stock audit<br>for your store.</p></div>
     <div class="card hero-card"><div class="trio"><div><span class="tile">${ic('store', 24)}</span><div><small>Store</small><b>${esc(c.store.code)}</b></div></div><div><div><small>Circle</small><b>${esc(c.store.circle)}</b></div></div><div><div><small>Audit Cycle</small><b>${c.cycle ? esc(c.cycle.name) : '—'}</b></div></div></div>${cta}</div></div>
     <div class="kcenter">${sum ? kpis(sum) : ''}${s && s.status === 'IN_PROGRESS' ? `<div class="kv kpi"><div><span>Serialized scanned</span><b>${fn(cn.serial)}</b></div><div><span>Non-serialized entries</span><b>${fn(cn.entries)}</b></div><div><span>Total physical units</span><b>${fn(cn.units)}</b></div></div>` : ''}</div>`;
 }
@@ -314,16 +323,16 @@ async function resultView(el, sid, embedded) {
   const rate = m.match_rate == null ? null : Number(m.match_rate);
   const trs = Number(m.short_transit || 0), shSub = m.short_transit == null || !shortU ? '' : `In transit ${fn(trs)} · Other ${fn(shortU - trs)}`;      // split only; the Short figure itself is unchanged
   const stat = (cls, icon, label, val, sub = '') => `<div class="rst"><span class="ric ${cls}">${ic(icon, 26)}</span><div><small>${label}</small><b class="${cls}">${val}</b>${sub ? `<em>${sub}</em>` : ''}</div></div>`;
-  const pill = (cls, icon, html) => `<span class="pl ${cls}">${ic(icon, 17)}<span>${html}</span></span>`;
+  const pill = (cls, icon, html) => `<span class="pl ${cls}">${ic(icon, 15)}<span>${html}</span></span>`;
   const pills = [pill('g', 'check', `<b>${fn(m.rows_match)}</b> matched lines`), pill('r', 'alert', `<b>${fn(m.rows_short)}</b> short lines`), pill('y', 'zap', `<b>${fn(m.rows_excess)}</b> excess lines`),
     vb.ser_short ? pill('b', 'barcode', `Serialized short <b>${fn(vb.ser_short)}</b>`) : '', vb.non_short ? pill('p', 'box', `Non-serialized short <b>${fn(vb.non_short)}</b>`) : '',
     vb.ser_excess ? pill('n', 'barcode', `Serialized excess <b>${fn(vb.ser_excess)}</b>`) : '', vb.non_excess ? pill('n', 'box', `Non-serialized excess <b>${fn(vb.non_excess)}</b>`) : ''].join('');
   el.innerHTML = `<div class="resfit">
     <div class="rhead"><div class="rh1">${staff ? `<a class="btn sm" href="#/storeaudit">${ic('back', 15)} Back</a>` : ''}<h1>Audit Result - ${esc(ss.stores?.code || '')}</h1>${badge(ss.status === 'LOCKED' ? 'Completed' : 'Superseded version', ss.status === 'LOCKED' ? 'ok' : 'warn')}
       <span class="rmeta">${esc(ss.audit_cycles?.name || '')} · Version ${ss.version} · Submitted ${fdt(ss.submitted_at)}</span></div><span class="live">${ic('lock', 14)} Locked</span></div>
-    <div class="card rsum2"><div class="rdon">${donut([{ v: matched, color: '#16A34A' }, { v: shortU, color: '#E5484D' }, { v: excessU, color: '#F5B301' }], rate == null ? '—' : rate.toFixed(1) + '%', 'Match Rate', 170, 13)}</div>
-      <div class="rright"><div class="rstats">${stat('', 'box', 'Expected', fn(m.expected))}${stat('g', 'check', 'Found', fn(m.physical))}${stat('r', 'alert', 'Short', fn(shortU), shSub)}${stat('y', 'trend', 'Excess', fn(excessU))}</div>
-        <div class="rpills">${pills}</div></div></div>
+    <div class="card rsum2"><div class="rtop"><div class="rdon">${donut([{ v: matched, color: '#16A34A' }, { v: shortU, color: '#E5484D' }, { v: excessU, color: '#F5B301' }], rate == null ? '—' : rate.toFixed(1) + '%', 'Match Rate', 130, 12)}</div>
+      <div class="rstats">${stat('', 'box', 'Expected', fn(m.expected))}${stat('g', 'check', 'Found', fn(m.physical))}${stat('r', 'alert', 'Short', fn(shortU), shSub)}${stat('y', 'trend', 'Excess', fn(excessU))}</div></div>
+      <div class="rpills">${pills}</div></div>
     <div class="rtool"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div>
       <div class="inp rsearch">${ic('search', 18)}<input id="q" placeholder="Search item code, description or serial..."></div></div>
     <div class="subtabs" id="rsub" hidden></div><div class="fchips" id="rchips" hidden></div><div id="rt"></div></div>`;

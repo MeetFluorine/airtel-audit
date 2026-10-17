@@ -236,23 +236,24 @@ PAGES.storeaudit = async el => {
   const cid = S.cycleId, { data: rows, error } = await sb.rpc('dash_stores', { p_cycle: cid }); if (error) throw error;
   const F = { circle: '', status: '', rate: '', variance: '', q: '', tab: 'ALL', page: 0 }; const PS = 10; if (window.__auditPreset) { Object.assign(F, window.__auditPreset); window.__auditPreset = null; }
   const crit = r => r.audit_status === 'COMPLETED' && r.match_rate != null && r.match_rate < 75;
+  const overdue = r => r.audit_status !== 'COMPLETED' && S.cycleDeadline && Date.now() > new Date(S.cycleDeadline).getTime();
   const list = () => rows.filter(r => (!F.circle || r.circle === F.circle) && (!F.status || r.audit_status === F.status) && (!F.q || (r.name + ' ' + r.code + ' ' + r.circle).toLowerCase().includes(F.q))
     && (!F.rate || (r.match_rate != null && (F.rate === 'crit' ? r.match_rate < 75 : F.rate === 'warn' ? r.match_rate >= 75 && r.match_rate < 90 : r.match_rate >= 90)))
     && (!F.variance || (F.variance === 'short' ? Number(r.short) > 0 : Number(r.excess) > 0))
-    && (F.tab === 'ALL' || (F.tab === 'CRIT' ? crit(r) : r.audit_status === F.tab)));
-  const cnt = k => k === 'ALL' ? rows.length : k === 'CRIT' ? rows.filter(crit).length : rows.filter(r => r.audit_status === k).length;
+    && (F.tab === 'ALL' || (F.tab === 'CRIT' ? crit(r) : F.tab === 'OVERDUE' ? overdue(r) : r.audit_status === F.tab)));
+  const cnt = k => k === 'ALL' ? rows.length : k === 'CRIT' ? rows.filter(crit).length : k === 'OVERDUE' ? rows.filter(overdue).length : rows.filter(r => r.audit_status === k).length;
   const sel = (id, label, opts, cur) => `<div><label>${label}</label><select id="${id}">${opts.map(o => `<option value="${o[0]}" ${o[0] === cur ? 'selected' : ''}>${o[1]}</option>`).join('')}</select></div>`;
   function table() {
     const l = list(), pageRows = l.slice(F.page * PS, F.page * PS + PS);
     return tbl(['Store Name', 'Circle', 'Status', 'Match Rate', 'Physical Found', 'Short', 'Excess', 'Last Updated', 'Action'], pageRows.map(r => { const s = crit(r) ? ['Critical', 'bad'] : STATUS_LBL[r.audit_status];
-      return `<tr><td><b>${esc(r.name)}</b><br><span class="muted">${esc(r.code)}</span></td><td>${esc(r.circle)}</td><td>${badge(s[0], s[1])}</td><td>${r.match_rate == null ? '—' : `<b class="${r.match_rate < 75 ? 'neg' : ''}">${pct(r.match_rate)}</b>`}</td><td>${r.physical == null ? '—' : fn(r.physical)}</td>
+      return `<tr><td><b>${esc(r.name)}</b><br><span class="muted">${esc(r.code)}</span></td><td>${esc(r.circle)}</td><td>${badge(s[0], s[1])}${overdue(r) ? ' ' + badge('Overdue', 'bad') : ''}</td><td>${r.match_rate == null ? '—' : `<b class="${r.match_rate < 75 ? 'neg' : ''}">${pct(r.match_rate)}</b>`}</td><td>${r.physical == null ? '—' : fn(r.physical)}</td>
         <td class="${Number(r.short) ? 'neg' : ''}">${r.short == null ? '—' : fn(r.short)}</td><td class="${Number(r.excess) ? 'pos' : ''}">${r.excess == null ? '—' : fn(r.excess)}</td><td class="nw">${r.last_updated ? fdt(r.last_updated) : '—'}</td><td><a class="eyeb" href="#/storedetail?s=${r.store_id}" title="Open store">${ic('eye', 17)}</a></td></tr>`; }).join('')) + numPager(l.length, F.page, PS);
   }
   el.innerHTML = `<div class="filters"><span style="flex:1"></span><button class="btn yel" id="exp">${ic('dl', 16)} Export</button></div>
     <div class="card" style="padding:16px"><div class="filters">${sel('f_ci', 'Circle', [['', 'All Circles'], ...[...new Set(rows.map(r => r.circle))].sort().map(c => [c, c])], F.circle)}${sel('f_st', 'Store Status', [['', 'All Status'], ['COMPLETED', 'Completed'], ['IN_PROGRESS', 'In Progress'], ['NOT_STARTED', 'Not Started']], F.status)}
       ${sel('f_ra', 'Match Rate', [['', 'All'], ['crit', 'Critical (< 75%)'], ['warn', 'Warning (75–90%)'], ['ok', 'Healthy (≥ 90%)']], F.rate)}${sel('f_va', 'Variance', [['', 'All'], ['short', 'Has short units'], ['excess', 'Has excess units']], F.variance)}
       <div style="flex:1;min-width:240px"><label>Search</label><div class="inp">${ic('search', 18)}<input id="f_q" placeholder="Search store name or circle... (Enter on an item code or serial to find it)"></div></div></div>
-      <div class="tabs seg" id="tabs" style="margin-bottom:12px">${[['ALL', 'All Stores'], ['COMPLETED', 'Completed'], ['IN_PROGRESS', 'In Progress'], ['NOT_STARTED', 'Not Started'], ['CRIT', 'Critical']].map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''} ${t[0] === 'CRIT' ? 'red' : ''}" data-tab="${t[0]}">${t[1]} (${cnt(t[0])})</button>`).join('')}</div>
+      <div class="tabs seg" id="tabs" style="margin-bottom:12px">${[['ALL', 'All Stores'], ['COMPLETED', 'Completed'], ['IN_PROGRESS', 'In Progress'], ['NOT_STARTED', 'Not Started'], ['OVERDUE', 'Overdue'], ['CRIT', 'Critical']].map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''} ${['CRIT', 'OVERDUE'].includes(t[0]) ? 'red' : ''}" data-tab="${t[0]}">${t[1]} (${cnt(t[0])})</button>`).join('')}</div>
       <div id="found"></div><div id="tbl">${table()}</div></div>`;
   const redraw = () => { el.querySelector('#tbl').innerHTML = table(); el.querySelectorAll('#tabs [data-tab]').forEach(b => { b.classList.toggle('on', b.dataset.tab === F.tab); const t = b.textContent.replace(/\(\d+\)/, `(${cnt(b.dataset.tab)})`); b.textContent = t; }); };
   async function find() {
