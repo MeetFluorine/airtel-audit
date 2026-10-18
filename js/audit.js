@@ -311,7 +311,8 @@ async function resultView(el, sid, embedded) {
   if (sm.error) throw sm.error;
   const ss = si.data, m = sm.data; let tab = 'ALL', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
   const subCache = {}; let rows = [];
-  const fv = fvR && !fvR.error && fvR.data ? fvR.data : null;      // distinct values for the click-to-select filters (database/19); without it those columns fall back to "contains"
+  const fv = fvR && !fvR.error && fvR.data ? fvR.data : null;      // distinct values for the click-to-select filters (database/19)
+  const fetchFV = async c => { const col = c.col || c.k; const r = await sb.from('reconciliation_results').select(col).eq('session_id', sid); return r.error || !r.data ? null : r.data.map(x => x[col]); };   // on-demand fallback: keeps the tick-list UI even when the RPC has no values
   /* remarks on short items (optional; the column is skipped if the remarks table is not installed yet) */
   const rkey = r => [r.item_code, r.inventory_status || '', r.item_quality || '', r.item_sno || ''].join('\u0001');
   const rmR = await sb.from('result_remarks').select('item_code,inventory_status,item_quality,item_sno,remark').eq('store_id', ss.store_id).eq('audit_cycle_id', ss.audit_cycle_id);
@@ -340,7 +341,7 @@ async function resultView(el, sid, embedded) {
   /* ---- column filters (shared module js/colfilter.js): click the funnel in a column header ---- */
   const CF = colFilters([{ k: 'item_code', l: 'Item Code', t: 'list' }, { k: 'item_description', l: 'Description', t: 'text' }, { k: 'inventory_status', l: 'Status', t: 'list' }, { k: 'item_uom', l: 'UoM', t: 'list' },
     { k: 'expected_qty', l: 'Expected', t: 'num' }, { k: 'physical_qty', l: 'Physical', t: 'num' }, { k: 'variance', l: 'Variance', t: 'num' }, { k: 'item_quality', l: 'Quality', t: 'list' },
-    { k: 'item_sno', l: 'Item SNo', t: 'text' }, { k: 'result', l: 'Result', t: 'list' }], fv, () => { page = 0; load(); });
+    { k: 'item_sno', l: 'Item SNo', t: 'text' }, { k: 'result', l: 'Result', t: 'list' }], fv, () => { page = 0; load(); }, fetchFV);
   const HEADS = ['item_code', 'item_description', 'inventory_status', 'item_uom', 'expected_qty', 'physical_qty', 'variance', 'item_quality', 'item_sno', 'result'];
   const WIDTHS = rmkOk ? [4, 9, 15, 9, 5, 7, 7, 7, 7, 11, 7, 12] : [4, 10, 19, 10, 6, 8, 8, 8, 7, 12, 8];     // % of the table width: it always fits, no sideways scrolling
   const ib = v => !v ? '—' : `<span class="ib ${/transit/i.test(v) ? 'b' : /^active$/i.test(v) ? 'g' : 'n'}">${esc(v)}</span>`;

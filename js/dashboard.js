@@ -350,8 +350,9 @@ PAGES.storedetail = async el => {
     { k: 'short_qty', l: 'Short', t: 'num' }, { k: 'excess_qty', l: 'Excess', t: 'num' }, { k: 'result', l: 'Status', t: 'list', vals: ['SHORT', 'EXCESS'] }];
   async function variance(kind) {
     let f = 'ALL', page = 0;
-    const fvR = await sb.rpc('result_filter_values', { p_session: L.id });          // distinct values for the tick-lists (database/19); falls back to "contains" boxes without it
-    const CF = colFilters(VC, fvR && !fvR.error ? fvR.data : null, () => { page = 0; draw().catch(e => toast(rpcMsg(e), 'err')); });
+    const fvR = await sb.rpc('result_filter_values', { p_session: L.id });          // distinct values for the tick-lists (database/19)
+    const fetchFV = async c => { const col = c.col || c.k; const r = await sb.from('reconciliation_results').select(col).eq('session_id', L.id); return r.error || !r.data ? null : r.data.map(x => x[col]); };   // on-demand fallback: keeps the tick-list UI even when the RPC has no values
+    const CF = colFilters(VC, fvR && !fvR.error ? fvR.data : null, () => { page = 0; draw().catch(e => toast(rpcMsg(e), 'err')); }, fetchFV);
     async function draw() {
       let qb = sb.from('reconciliation_results').select('item_code,inventory_status,item_description,item_uom,item_quality,item_sno,expected_qty,physical_qty,matched_qty,short_qty,excess_qty,result,is_unlisted,is_serialized', { count: 'exact' }).eq('session_id', L.id);
       if (kind === 'serial') qb = qb.eq('is_serialized', true); if (kind === 'nonserial') qb = qb.eq('is_serialized', false); qb = f === 'ALL' ? qb.neq('result', 'MATCH') : qb.eq('result', f);

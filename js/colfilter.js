@@ -1,14 +1,22 @@
 // Click-to-filter column headers (funnel button -> tick values / type text / set a range), shared by the store result page
 // and the Admin / Circle Head store view. Usage:
-//   const CF = colFilters([{ k: 'item_code', l: 'Item_Code', t: 'list' }, ...], valuesFromRpc, () => reloadTable());
+//   const CF = colFilters([{ k: 'item_code', l: 'Item_Code', t: 'list' }, ...], valuesFromRpc, () => reloadTable(), fetchVals);
 //   header cell: CF.th('item_code')      query: qb = CF.apply(qb)      chips: CF.chips(boxEl)      clicks: if (CF.handle(e)) return;
 // Already-loaded rows (no server query): rows.filter(CF.test), columns may give get: row => value.
 // column: k = key, l = label, t = 'list' | 'text' | 'num', col = database column if different from k, vals = fixed list of values, lab = value labels.
-// A 'list' column without any values (database/19 not installed) quietly becomes a "contains" box. 'variance' = physical - expected.
-function colFilters(cols, fv, onChange) {
+// fetchVals (optional): async col => raw values[]. A 'list' column ALWAYS shows the multi-select tick list: values come
+// from the result_filter_values RPC (database/19); when those are missing the distinct values are fetched on demand
+// through fetchVals instead of degrading to a "contains" box. 'variance' = physical - expected.
+function colFilters(cols, fv, onChange, fetchVals) {
   const F = {}, byK = k => cols.find(c => c.k === k), RL = { MATCH: 'Matched', SHORT: 'Short', EXCESS: 'Excess' };
-  const vals = c => c.vals || (c.k === 'result' ? ['MATCH', 'SHORT', 'EXCESS'] : (fv && Array.isArray(fv[c.k]) ? fv[c.k] : null));
-  const type = c => c.t === 'list' && !vals(c) ? 'text' : c.t;
+  const vals = c => { const v = c.vals || (c.k === 'result' ? ['MATCH', 'SHORT', 'EXCESS'] : (fv && Array.isArray(fv[c.k]) ? fv[c.k] : null)); return v && v.length ? v : null; };
+  const lazy = {};   // k -> Promise<string[]|null>: distinct values fetched on demand when the RPC had none (cached per column)
+  async function listVals(c) {
+    const v = vals(c); if (v) return v;
+    if (typeof fetchVals !== 'function') return null;
+    if (!lazy[c.k]) lazy[c.k] = (async () => { try { const r = await fetchVals(c); return Array.isArray(r) ? [...new Set(r.map(x => x == null ? '' : String(x)))].sort() : null; } catch (e) { return null; } })();
+    return lazy[c.k];
+  }
   const vlabel = (c, v) => v === '' ? '(Blank)' : c.lab && c.lab[v] != null ? c.lab[v] : c.k === 'result' ? (RL[v] || v) : v;
   const FUN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>';
   const quote = v => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
@@ -36,8 +44,8 @@ function colFilters(cols, fv, onChange) {
   }
   let popOff = null;
   function close() { const p = document.getElementById('cfpop'); if (p) p.remove(); if (popOff) { popOff(); popOff = null; } }
-  function open(k, btn) {
-    close(); const c = byK(k), t = type(c), cur = F[k] || {}, vs = t === 'list' ? vals(c) : [], sel = new Set(cur.in || []);
+  async function open(k, btn) {
+    close(); const c = byK(k), t = c.t, cur = F[k] || {}, vs = t === 'list' ? (await listVals(c)) || [] : [], sel = new Set(cur.in || []);
     const pop = document.createElement('div'); pop.className = 'cfpop'; pop.id = 'cfpop'; pop.dataset.col = k;
     pop.innerHTML = `<div class="cft">${esc(c.l)}</div>` + (t === 'list' ? `<input class="cfs" placeholder="Search values…" autocomplete="off"><div class="cfa"><button type="button" data-a="all">Select all</button><button type="button" data-a="none">Clear</button></div>
         <div class="cfl">${vs.map((v, i) => `<label class="chk" data-s="${esc(vlabel(c, v).toLowerCase())}"><input type="checkbox" data-i="${i}" ${sel.has(v) ? 'checked' : ''}> <span>${esc(vlabel(c, v))}</span></label>`).join('') || '<div class="muted">No values</div>'}</div>`
