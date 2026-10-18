@@ -91,3 +91,18 @@ function askDeleteAccount({ title, lead, bullets, run }) {
   const go = o.querySelector('.ma .btn.danger'), inp = o.querySelector('#dz-in'); go.disabled = true;
   inp.oninput = () => { go.disabled = inp.value.trim().toUpperCase() !== 'DELETE'; }; inp.focus(); return o;
 }
+
+/* Lazy-load the Excel library (~880KB) only when it is actually needed
+   (base file upload, report export) instead of on every page load. */
+let __xlsxP = null;
+function loadXlsx() {
+  if (window.XLSX) return Promise.resolve();
+  if (!__xlsxP) __xlsxP = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload = res;
+    s.onerror = () => { __xlsxP = null; rej(new Error('Could not load the Excel library. Check your connection and try again.')); };
+    document.head.appendChild(s);
+  });
+  return __xlsxP;
+}

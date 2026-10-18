@@ -255,4 +255,4 @@ function wireSignupMgmt() {
     if (error) throw error; if (!data.session) toast('Account created. Please confirm your email, then log in.', 'ok');
   });
 }
-window.addEventListener('load', boot);   // after ALL page scripts are loaded
+window.addEventListener('DOMContentLoaded', boot);   // boot as soon as the page parses - no waiting for images/fonts

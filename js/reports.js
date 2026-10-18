@@ -37,6 +37,7 @@ const staffOnly = el => { if (!isStaff()) { el.innerHTML = '<div class="card sta
 // Fetch every page of a report and save it as an .xlsx. The first page is flagged so the SERVER logs the export.
 async function downloadReport(rep, cycleId, circleId, storeId, inc, msgEl) {
   const R = REPORTS[rep], PSZ = 2000; let off = 0, all = [], total = 0;
+  await loadXlsx();
   for (;;) {
     const { data, error } = await sb.rpc('report_rows', { p_report: rep, p_cycle: cycleId, p_circle: circleId || null, p_store: storeId || null, p_include_matched: !!(R.variance && inc), p_offset: off, p_limit: PSZ, p_export: off === 0 }); if (error) throw error;
     total = data.total; all = all.concat(data.rows); if (msgEl) msgEl.textContent = `Fetching ${fn(all.length)} / ${fn(total)}…`; off += PSZ;
@@ -49,6 +50,28 @@ async function downloadReport(rep, cycleId, circleId, storeId, inc, msgEl) {
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, R.title.slice(0, 31));
   const d = new Date(), ymd = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'), cname = (S.cycles.find(c => c.id === cycleId) || {}).name || '';
   XLSX.writeFile(wb, `Shadowfax_Airtel_${slug(R.title)}_${slug(cname)}_${ymd}.xlsx`); toast(`Downloaded ${fn(all.length)} row(s).`, 'ok');
+}
+
+// Export the filtered audit log to .xlsx (pages through audit_log the way downloadReport pages through report_rows).
+async function downloadLogs(F, msgEl) {
+  const PSZ = 200; let off = 0, all = [], total = 0;
+  await loadXlsx();
+  for (;;) {
+    const { data, error } = await sb.rpc('audit_log', { p_from: F.from || null, p_to: F.to || null, p_type: F.type || null, p_store: F.store || null, p_cycle: F.cycle || null, p_q: F.q || null, p_offset: off, p_limit: PSZ });
+    if (error) throw error;
+    total = data.total; all = all.concat(data.rows); if (msgEl) msgEl.textContent = `Fetching ${fn(all.length)} / ${fn(total)}…`; off += PSZ;
+    if (off >= total || !data.rows.length) break; if (all.length >= 200000) { toast('Stopped at 200,000 rows. Narrow the filters to export the rest.', 'err'); break; }
+  }
+  if (msgEl) msgEl.textContent = '';
+  if (!all.length) { toast('There is nothing to export for these filters.', 'err'); return; }
+  const meta = m => Object.entries(m || {}).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' · ');
+  const rows = all.map(r => ({ 'Date & Time': fdt(r.created_at), 'User': r.user_name || '—', 'Email': r.user_email || '', 'Role': (r.role || '').replace('_', ' '), 'Activity': LOG_LBL[r.event_type] || r.event_type, 'Store': r.store_code || '—', 'Cycle': r.cycle_name || '—', 'Details': meta(r.metadata) }));
+  const head = Object.keys(rows[0]);
+  const ws = XLSX.utils.json_to_sheet(rows, { header: head });
+  ws['!cols'] = head.map(h => ({ wch: Math.min(42, Math.max(h.length + 2, ...rows.slice(0, 200).map(r => String(r[h] == null ? '' : r[h]).length + 2))) }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Audit Log');
+  const d = new Date(), ymd = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  XLSX.writeFile(wb, `Shadowfax_Airtel_Audit_Log_${ymd}.xlsx`); toast(`Downloaded ${fn(all.length)} row(s).`, 'ok');
 }
 
 /* ================= REPORTS ================= */
@@ -134,7 +157,7 @@ async function logsView(el, presetStore) {
       <div><label>Activity Type</label><select id="l_type"><option value="">All Activities</option>${types.map(t => `<option value="${t}">${esc(LOG_LBL[t])}</option>`).join('')}</select></div>
       <div><label>Store</label><select id="l_st"><option value="">All stores</option>${stores.map(s => `<option value="${s.id}" ${s.id === F.store ? 'selected' : ''}>${esc(s.code)}</option>`).join('')}</select></div>
       <div><label>Audit cycle</label><select id="l_cy"><option value="">All cycles</option>${(cyc.data || []).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
-      <div><label>From</label><input type="date" id="l_from"></div><div><label>To</label><input type="date" id="l_to"></div><button class="btn" id="l_reset">Reset</button></div><div id="lg"></div></div>`;
+      <div><label>From</label><div class="inp"><input type="date" id="l_from" style="padding:13px 2px"></div></div><div><label>To</label><div class="inp"><input type="date" id="l_to" style="padding:13px 2px"></div></div><button class="btn" id="l_reset">${ic('sync', 15)} Reset</button><button class="btn yel" id="l_exp">${ic('dl', 16)} Export</button><span id="lexmsg" class="muted"></span></div><div id="lg"></div></div>`;
   const $ = id => el.querySelector('#' + id);
   const meta = m => Object.entries(m || {}).slice(0, 4).map(([k, v]) => `${esc(k)}: ${esc(typeof v === 'object' ? JSON.stringify(v) : v)}`).join(' · ');
   async function load() {
@@ -147,6 +170,7 @@ async function logsView(el, presetStore) {
   }
   const apply = () => { F.from = $('l_from').value; F.to = $('l_to').value; F.type = $('l_type').value; F.cycle = $('l_cy').value; F.store = $('l_st').value; F.q = $('l_q').value.trim(); page = 0; load().catch(x => toast(rpcMsg(x), 'err')); };
   $('l_reset').onclick = () => { ['l_q', 'l_type', 'l_st', 'l_cy', 'l_from', 'l_to'].forEach(i => { $(i).value = ''; }); apply(); };
+  $('l_exp').onclick = () => busy($('l_exp'), () => downloadLogs(F, $('lexmsg'))).catch(x => { if ($('lexmsg')) $('lexmsg').textContent = ''; toast(rpcMsg(x), 'err'); });
   el.onkeydown = e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') apply(); }; el.onchange = e => { if (e.target.tagName === 'SELECT' || e.target.type === 'date') apply(); };
   await load();
 }

@@ -23,10 +23,10 @@ PAGES.stores = async el => {
   function table() {
     const l = list();
     return tbl(['Store Name', 'Locator', 'Circle', 'Store Type', 'Status', 'Assigned User', 'Action'], l.slice(F.page * PS, F.page * PS + PS).map(s => `<tr><td><b>${esc(s.code)}</b><br><span class="muted">${esc(s.name)}</span></td><td>${esc(s.locator || '—')}</td><td>${esc(s.circles?.code || '')}</td><td>${esc(s.store_type || '—')}</td>
-      <td>${badge(s.active ? 'Active' : 'Inactive', s.active ? 'ok' : 'bad')}</td><td>${esc((asg[s.id] || []).join(', ') || '—')}</td><td>${isAdmin() ? `<button class="eyeb" data-act="edit" data-id="${s.id}" title="Edit store">${ic('edit', 16)}</button>` : ''}</td></tr>`).join('')) + numPager(l.length, F.page, PS);
+      <td>${badge(s.active ? 'Active' : 'Inactive', s.active ? 'ok' : 'bad')}</td><td>${esc((asg[s.id] || []).join(', ') || '—')}</td><td>${isAdmin() ? `<button class="eyeb" data-act="edit" data-id="${s.id}" title="Edit store">${ic('edit', 16)}</button>` : `<a class="eyeb" href="#/storedetail?s=${s.id}" title="View store">${ic('eye', 16)}</a>`}</td></tr>`).join('')) + numPager(l.length, F.page, PS);
   }
   function draw() {
-    el.innerHTML = `<div class="filters" style="justify-content:flex-end">${isAdmin() ? `<button class="btn" data-act="circles">Manage Circles</button><button class="btn yel" data-act="add">${ic('plus', 16)} Add Store</button>` : ''}</div>
+    el.innerHTML = `<div class="filters" style="justify-content:flex-end">${isAdmin() ? `<button class="btn" data-act="circles">${ic('grid', 16)} Manage Circles</button><button class="btn yel" data-act="add">${ic('plus', 16)} Add Store</button>` : ''}</div>
       <div class="card" style="padding:16px"><div class="filters">${sel2('f_ci', 'Circle', [['', 'All Circles'], ...circles.map(c => [c.id, c.code])], F.circle)}${sel2('f_ty', 'Store Type', [['', 'All Types'], ['Exclusive', 'Exclusive'], ['Shared', 'Shared']], F.type)}${sel2('f_st', 'Status', [['', 'All Status'], ['A', 'Active'], ['I', 'Inactive']], F.status)}
         <div style="flex:1;min-width:220px"><label>Search</label><div class="inp">${ic('search', 18)}<input id="f_q" placeholder="Search store name or locator..." value="${esc(F.q)}"></div></div></div><div id="tbl">${table()}</div></div>`;
   }

@@ -82,8 +82,9 @@ if (!window.__adHashWired) { window.__adHashWired = true; window.addEventListene
 
 async function adminDash(el) {
   if (!S.cycleId) { adRemoveSearch(); return noCycle(el); }
-  const cid = S.cycleId, AD = { metric: 'short', range: 6, f: null, trend: [], kpiTrend: [], note: false }, num = v => Number(v) || 0, share = (v, tot) => tot ? 100 * v / tot : 0;
+  const cid = S.cycleId, AD = { metric: 'short', range: 6, f: null, trend: [], kpiTrend: [], note: false, breakdown: null }, num = v => Number(v) || 0, share = (v, tot) => tot ? 100 * v / tot : 0;
   const [o, s] = await Promise.all([sb.rpc('dash_overview', { p_cycle: cid }), sb.rpc('dash_stores', { p_cycle: cid })]);
+  try { const b = await sb.rpc('dash_shortage_breakdown', { p_cycle: cid }); if (!b.error) AD.breakdown = b.data; } catch (e) { /* 24 not run yet: legend shows the total only */ }
   if (o.error) throw o.error; if (s.error) throw s.error;
   const rowsAll = s.data, circleOf = Object.fromEntries(rowsAll.map(r => [r.store_id, r.circle]));
   const heads = [...o.data.heads].sort((a, b) => num(b.stores) - num(a.stores) || String(a.label).localeCompare(b.label)).slice(0, 5);
@@ -98,6 +99,9 @@ async function adminDash(el) {
     return cache[key] = r.data;
   }
   async function loadTrends() { const c = AD.f ? AD.f.circles : null; AD.note = false; [AD.kpiTrend, AD.trend] = await Promise.all([getTrend(6, c), getTrend(AD.range, c)]); }
+  async function loadBreakdown() { const c = AD.f ? AD.f.circles : null;
+    try { const b = await sb.rpc('dash_shortage_breakdown', { p_cycle: cid, p_circles: c }); AD.breakdown = b.error ? null : b.data; }
+    catch (e) { AD.breakdown = null; } }
   await loadTrends();
 
   const r1 = v => Math.round(v * 10) / 10, p1 = v => r1(v).toFixed(1);
@@ -145,13 +149,29 @@ async function adminDash(el) {
     const top = Object.values(cmap).sort((a, b) => val(b) - val(a) || b.stores - a.stores || String(a.name).localeCompare(b.name)).slice(0, 5), mx = Math.max(1, ...top.map(val));
     const bars = top.length ? top.map(c => `<div class="dsh-bar" role="button" tabindex="0" data-circ="${esc(c.name)}" title="Show only ${esc(c.name)}"><span class="nm">${esc(c.name)}</span><div class="tr"><i style="width:${val(c) ? Math.max(2, 100 * val(c) / mx) : 0}%;background:${mCol}"></i></div><b class="vl" style="color:${mCol}">${fn(val(c))}</b></div>`).join('') : '<div class="dsh-empty">No circles to show.</div>';
 
-    /* stock condition */
+    /* stock condition (shortage split into in-transit / serialized / non-serialized) */
     const others = Math.max(0, T.expected - T.matched - T.short), stockTot = T.matched + T.short + T.excess + others;
-    const stock = [['Available', T.matched, '#16A34A', ''], ['Short', T.short, '#F0383B', 'short'], ['Excess', T.excess, '#F8B814', 'excess'], ['Others', others, '#7D8A99', '']];
+    const bd = AD.breakdown, bdn = v => Math.max(0, Math.round(Number(v) || 0));
+    const shTransit = bd ? bdn(bd.short_transit) : 0, shSer = bd ? bdn(bd.ser_short) : 0, shNon = bd ? bdn(bd.non_short) : 0;
+    const donutParts = bd
+      ? [{ v: T.matched, color: '#16A34A' }, { v: shTransit, color: '#FCA5A5' }, { v: shSer, color: '#E5484D' }, { v: shNon, color: '#F59E0B' }, { v: T.excess, color: '#F8B814' }, { v: others, color: '#7D8A99' }]
+      : [{ v: T.matched, color: '#16A34A' }, { v: T.short, color: '#F0383B' }, { v: T.excess, color: '#F8B814' }, { v: others, color: '#7D8A99' }];
+    const legRow = (label, val, color, tint, legend, tip) => {
+      const attrs = legend ? ` class="tint lk" role="button" tabindex="0" data-legend="${legend}" title="Rank circles by ${label.toLowerCase()} units"` : ` class="tint"${tip ? ` title="${tip}"` : ''}`;
+      return `<div${attrs} style="--tint:${tint};--pill:${color}"><i style="background:${color}"></i><span>${label}</span><b>${fn(val)}</b><span class="p">${stockTot ? (100 * val / stockTot).toFixed(1) : '0.0'}%</span></div>`;
+    };
+    const legSub = (label, val, color) => `<div class="sub" title="${T.short ? (100 * val / T.short).toFixed(1) : '0.0'}% of total shortage"><i style="background:${color}"></i><span>${label}</span><b>${fn(val)}</b><span class="p">${T.short ? (100 * val / T.short).toFixed(1) : '0.0'}%</span></div>`;
+    const shortSubs = bd ? `<div class="tree">${legSub('In transit', shTransit, '#FCA5A5')}${legSub('Serialized', shSer, '#E5484D')}${legSub('Non-serialized', shNon, '#F59E0B')}</div>` : '';
+    const stockLeg = legRow('Available', T.matched, '#16A34A', '#E7F6ED', '')
+      + legRow('Short', T.short, '#E5484D', '#FDECEC', 'short')
+      + shortSubs
+      + legRow('Excess', T.excess, '#F8B814', '#FEF6DE', 'excess')
+      + legRow('Others', others, '#7D8A99', '#F1F4F6', '', 'Expected units that are neither matched nor short');
+    const bdHint = !bd && isAdmin() ? `<div class="alert warn" style="margin:0 4px 10px"><b>Database update needed.</b> The shortage split (in-transit / serialized / non-serialized) is hidden because the database is on the older version. Run <code>database/24_stock_shortage_breakdown.sql</code> in the Supabase SQL editor, then refresh.</div>` : '';
 
     /* tables */
     const crit = done.filter(r => r.match_rate != null && r.match_rate < 75).sort((a, b) => a.match_rate - b.match_rate || num(b.short) - num(a.short)).slice(0, 5);
-    const critRows = crit.length ? crit.map(r => `<tr class="go" data-go="#/storedetail?s=${r.store_id}" title="${esc(r.code)}"><td><a class="sn" href="#/storedetail?s=${r.store_id}">${esc(r.name)}</a></td><td>${esc(r.circle)}</td><td class="neg">${pct(r.match_rate)}</td><td class="neg">${fn(r.short)}</td><td>${fn(r.excess)}</td><td><span class="pill bad">CRITICAL</span></td></tr>`).join('') : '<tr><td colspan="6" class="none">No critical stores.</td></tr>';
+    const critRows = crit.length ? crit.map(r => `<tr class="go" data-go="#/storedetail?s=${r.store_id}" title="${esc(r.code)}"><td><a class="sn" href="#/storedetail?s=${r.store_id}">${esc(r.name)}</a></td><td>${esc(r.circle)}</td><td class="neg">${pct(r.match_rate)}</td><td class="neg">${fn(r.short)}</td><td>${fn(r.excess)}</td></tr>`).join('') : '<tr><td colspan="5" class="none">No critical stores.</td></tr>';
     const act = o.data.activity.filter(a => !set || set.has(circleOf[a.store_id])).slice(0, 5);
     const actRows = act.map(a => `<tr class="go" data-go="#/storedetail?s=${a.store_id}"><td><a class="sn" href="#/storedetail?s=${a.store_id}">${esc(a.store_code || '—')}</a></td><td>${esc(circleOf[a.store_id] || '-')}</td><td><span class="ap ${AP[a.event_type] || 'gr'}">${EVT[a.event_type] || esc(a.event_type)}</span></td><td class="tm">${ago(a.created_at)}</td></tr>`).join('') || '<tr><td colspan="4" class="none">No activity yet.</td></tr>';
 
@@ -168,7 +188,8 @@ async function adminDash(el) {
     <div class="dsh-r2">
       <section class="dsh-card"><div class="dsh-head">${tile('users')}<div class="ht"><b>Top 5 Circles</b></div><div class="hr"><select id="dsh-metric" aria-label="Rank circles by">${Object.entries(METRIC).map(([k, v]) => `<option value="${k}" ${k === AD.metric ? 'selected' : ''}>By ${v[0]}</option>`).join('')}</select></div></div><div class="dsh-bars">${bars}</div></section>
       <section class="dsh-card"><div class="dsh-head">${tile('box')}<div class="ht"><b>Stock Condition</b></div></div>
-        <div class="dsh-stock">${adDonut(stock.map(x => ({ v: x[1], color: x[2] })), stockTot)}<div class="dsh-leg">${stock.map(x => `<div ${x[3] ? `class="lk" role="button" tabindex="0" data-legend="${x[3]}" title="Rank circles by ${x[0].toLowerCase()} units"` : ''}><i style="background:${x[2]}"></i><span>${x[0]}</span><b>${fn(x[1])}</b><span class="p">${stockTot ? (100 * x[1] / stockTot).toFixed(1) : '0.0'}%</span></div>`).join('')}</div></div></section>
+        ${bdHint}
+        <div class="dsh-stock">${adDonut(donutParts, stockTot, 132)}<div class="dsh-leg">${stockLeg}</div></div></section>
     </div>
     <div class="dsh-r3">
       <section class="dsh-card"><div class="dsh-head">${tile('bars')}<div class="ht"><b>Audit Trend</b>${AD.note ? '<small class="warn">Trend shows all circles (run database/13_dashboard_filter.sql to filter it)</small>' : ''}</div><div class="hr"><select id="dsh-range" aria-label="Number of cycles">${[3, 6, 12].map(n => `<option value="${n}" ${n === AD.range ? 'selected' : ''}>Last ${n} Cycles</option>`).join('')}</select></div></div>
@@ -177,7 +198,7 @@ async function adminDash(el) {
     </div>
     <div class="dsh-r4">
       <section class="dsh-card"><div class="dsh-head"><span class="hic" style="color:#E5484D">${ic('warnc', 26, 1.8)}</span><div class="ht"><b>Critical Stores</b></div><div class="hr"><a class="dsh-vall bl" href="#/storeaudit" data-crit>View All ${ic('arrow', 14, 2)}</a></div></div>
-        <div class="dsh-tw"><table class="dsh-t"><thead><tr><th>Store Name</th><th>Circle</th><th>Match Rate</th><th>Short Units</th><th>Excess Units</th><th>Status</th></tr></thead><tbody>${critRows}</tbody></table></div></section>
+        <div class="dsh-tw"><table class="dsh-t"><thead><tr><th>Store Name</th><th>Circle</th><th>Match Rate</th><th>Short Units</th><th>Excess Units</th></tr></thead><tbody>${critRows}</tbody></table></div></section>
       <section class="dsh-card"><div class="dsh-head"><span class="hic" style="color:#E5484D">${ic('clock', 26, 1.8)}</span><div class="ht"><b>Recently Updated Stores</b></div><div class="hr"><a class="dsh-vall" href="#/logs">View All ${ic('arrow', 14, 2)}</a></div></div>
         <div class="dsh-tw"><table class="dsh-t"><thead><tr><th>Store Name</th><th>Circle</th><th>Action</th><th>Time</th></tr></thead><tbody>${actRows}</tbody></table></div></section>
     </div></div>`;
@@ -189,6 +210,7 @@ async function adminDash(el) {
   async function setFilter(f) {
     el.classList.add('dsh-busy'); AD.f = f;
     try { await loadTrends(); } catch (e) { toast(rpcMsg(e), 'err'); }
+    await loadBreakdown();
     render(); el.classList.remove('dsh-busy');
   }
   const same = (a, b) => a && b && a.type === b.type && a.key === b.key;
@@ -235,6 +257,7 @@ PAGES.storeaudit = async el => {
   if (!S.cycleId) return noCycle(el);
   const cid = S.cycleId, { data: rows, error } = await sb.rpc('dash_stores', { p_cycle: cid }); if (error) throw error;
   const F = { circle: '', status: '', rate: '', variance: '', q: '', tab: 'ALL', page: 0 }; const PS = 10; if (window.__auditPreset) { Object.assign(F, window.__auditPreset); window.__auditPreset = null; }
+  const circleIdOf = Object.fromEntries(rows.map(r => [r.circle, r.circle_id]));
   const crit = r => r.audit_status === 'COMPLETED' && r.match_rate != null && r.match_rate < 75;
   const overdue = r => r.audit_status !== 'COMPLETED' && S.cycleDeadline && Date.now() > new Date(S.cycleDeadline).getTime();
   const list = () => rows.filter(r => (!F.circle || r.circle === F.circle) && (!F.status || r.audit_status === F.status) && (!F.q || (r.name + ' ' + r.code + ' ' + r.circle).toLowerCase().includes(F.q))
@@ -253,7 +276,7 @@ PAGES.storeaudit = async el => {
     <div class="card" style="padding:16px"><div class="filters">${sel('f_ci', 'Circle', [['', 'All Circles'], ...[...new Set(rows.map(r => r.circle))].sort().map(c => [c, c])], F.circle)}${sel('f_st', 'Store Status', [['', 'All Status'], ['COMPLETED', 'Completed'], ['IN_PROGRESS', 'In Progress'], ['NOT_STARTED', 'Not Started']], F.status)}
       ${sel('f_ra', 'Match Rate', [['', 'All'], ['crit', 'Critical (< 75%)'], ['warn', 'Warning (75–90%)'], ['ok', 'Healthy (≥ 90%)']], F.rate)}${sel('f_va', 'Variance', [['', 'All'], ['short', 'Has short units'], ['excess', 'Has excess units']], F.variance)}
       <div style="flex:1;min-width:240px"><label>Search</label><div class="inp">${ic('search', 18)}<input id="f_q" placeholder="Search store name or circle... (Enter on an item code or serial to find it)"></div></div></div>
-      <div class="tabs seg" id="tabs" style="margin-bottom:12px">${[['ALL', 'All Stores'], ['COMPLETED', 'Completed'], ['IN_PROGRESS', 'In Progress'], ['NOT_STARTED', 'Not Started'], ['OVERDUE', 'Overdue'], ['CRIT', 'Critical']].map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''} ${['CRIT', 'OVERDUE'].includes(t[0]) ? 'red' : ''}" data-tab="${t[0]}">${t[1]} (${cnt(t[0])})</button>`).join('')}</div>
+      <div class="tabs seg" id="tabs" style="margin-bottom:12px">${[['ALL', 'All Stores'], ['COMPLETED', 'Completed'], ['IN_PROGRESS', 'In Progress'], ['NOT_STARTED', 'Not Started'], ...(S.cycleDeadline ? [['OVERDUE', 'Overdue']] : []), ['CRIT', 'Critical']].map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''} ${['CRIT', 'OVERDUE'].includes(t[0]) ? 'red' : ''}" data-tab="${t[0]}">${t[1]} (${cnt(t[0])})</button>`).join('')}</div>
       <div id="found"></div><div id="tbl">${table()}</div></div>`;
   const redraw = () => { el.querySelector('#tbl').innerHTML = table(); el.querySelectorAll('#tabs [data-tab]').forEach(b => { b.classList.toggle('on', b.dataset.tab === F.tab); const t = b.textContent.replace(/\(\d+\)/, `(${cnt(b.dataset.tab)})`); b.textContent = t; }); };
   async function find() {
@@ -265,7 +288,7 @@ PAGES.storeaudit = async el => {
   el.oninput = e => { if (e.target.id === 'f_q') { F.q = e.target.value.trim().toLowerCase(); F.page = 0; redraw(); } };
   el.onkeydown = e => { if (e.key === 'Enter' && e.target.id === 'f_q') find(); };
   el.onclick = e => { const t = e.target.closest('[data-tab]'); if (t) { F.tab = t.dataset.tab; F.page = 0; return redraw(); } const p = e.target.closest('[data-np]'); if (p) { F.page = Number(p.dataset.np); redraw(); }
-    const x = e.target.closest('#exp'); if (x) busy(x, () => downloadReport('store_summary', cid, F.circle ? null : null, null, false)).catch(err => toast(rpcMsg(err), 'err')); };
+    const x = e.target.closest('#exp'); if (x) busy(x, () => downloadReport('store_summary', cid, F.circle ? circleIdOf[F.circle] || null : null, null, false)).catch(err => toast(rpcMsg(err), 'err')); };
 };
 
 /* ================= STORE DETAIL (drill-down) ================= */
@@ -286,7 +309,7 @@ PAGES.storedetail = async el => {
   let tab = 'overview'; const PS = 50;
   el.innerHTML = `<div class="sdhead"><div><a class="btn sm" href="#/storeaudit" style="margin-bottom:10px">${ic('back', 15)} Back to List</a><div style="display:flex;align-items:center;gap:12px"><h1 style="margin:0">${esc(store.code)}</h1>${stat}</div>
       <p class="muted" style="margin:4px 0 0">${esc(store.circles?.code || '')} Circle &nbsp;|&nbsp; ${esc(store.store_type || '—')} Store &nbsp;|&nbsp; Audit Cycle: ${esc(cyc.name)}</p></div>
-      <div class="row">${locked ? `<a class="btn" href="#/result?sess=${L.id}">${ic('clip', 16)} Full reconciliation</a><button class="btn danger-o" id="reopen">Reopen audit</button>` : ''}<a class="btn" href="#/basestock?s=${sid}">${base ? 'Revise base stock' : 'Upload base stock'}</a>
+      <div class="row">${locked ? `<a class="btn" href="#/result?sess=${L.id}">${ic('clip', 16)} Full reconciliation</a><button class="btn danger-o" id="reopen">${ic('alert', 15)} Reopen audit</button>` : ''}<a class="btn" href="#/basestock?s=${sid}">${ic('box', 15)} ${base ? 'Revise base stock' : 'Upload base stock'}</a>
         <button class="btn yel" id="dlr" ${locked ? '' : 'disabled'}>${ic('dl', 16)} Download Report</button></div></div>
     <div class="tabs seg" id="tabs" style="margin-bottom:14px">${[['overview', 'Overview'], ['variance', 'Variance Details'], ['serial', 'Serialized Items'], ['nonserial', 'Non-Serialized Items'], ['history', 'Audit History']].map(t => `<button class="tab ${t[0] === tab ? 'on' : ''}" data-tab="${t[0]}">${t[1]}</button>`).join('')}</div><div id="tabbody"></div>`;
   const body = el.querySelector('#tabbody'), reload = () => PAGES.storedetail(el), needLocked = '<div class="card" style="padding:20px"><p class="muted" style="margin:0">Available once the store submits its audit.</p></div>';
@@ -297,16 +320,21 @@ PAGES.storedetail = async el => {
     if (tab === 'overview') {
       let vb = { ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, issues = [], units = 0, pend = null, trs = 0;
       if (locked) { const [a, b, rsm] = await Promise.all([sb.rpc('store_variance_breakdown', { p_session: L.id }), sb.from('reconciliation_results').select('item_code,inventory_status,item_quality,item_description,is_serialized,expected_qty,physical_qty,short_qty,result').eq('session_id', L.id).neq('result', 'MATCH').order('short_qty', { ascending: false }).limit(5), sb.rpc('result_summary', { p_session: L.id })]); vb = a.data || vb; issues = b.data || []; trs = Number((rsm.data && rsm.data.short_transit) || 0); }
-      else if (L) { const [c1, c2] = await Promise.all([sb.from('audit_serial_scans').select('id', { count: 'exact', head: true }).eq('session_id', L.id), sb.from('audit_non_serial_entries').select('physical_qty').eq('session_id', L.id)]); units = (c1.count || 0) + (c2.data || []).reduce((a, x) => a + Number(x.physical_qty), 0); }
+      else if (L) {
+        let u = null;
+        try { const r = await sb.rpc('session_counted_units', { p_session: L.id }); if (r.error) throw r.error; u = r.data; } catch (e) { u = null; /* 23_perf.sql not run yet: fall back */ }
+        if (u) units = Number(u.serial_scans || 0) + Number(u.non_serial_qty || 0);
+        else { const [c1, c2] = await Promise.all([sb.from('audit_serial_scans').select('id', { count: 'exact', head: true }).eq('session_id', L.id), sb.from('audit_non_serial_entries').select('physical_qty').eq('session_id', L.id)]); units = (c1.count || 0) + (c2.data || []).reduce((a, x) => a + Number(x.physical_qty), 0); }
+      }
       const exp = Number(base?.expected_units || 0), prog = locked ? 100 : exp ? Math.min(100, Math.round(100 * units / exp)) : 0, mx = Math.max(1, vb.ser_short, vb.ser_excess, vb.non_short, vb.non_excess);
       const kc = (l, i, bg, fg, v, cls = '') => `<div class="card kcard ${cls}"><div class="kt">${tl(i, bg, fg)}${l}</div><div class="kv1"><b>${v}</b></div></div>`;
       const vr = (l, v, col) => `<div class="vbar"><span>${l}</span><div class="tr"><i style="width:${100 * v / mx}%;background:${col}"></i></div><b>${fn(v)}</b></div>`;
       body.innerHTML = `<div class="kgrid4" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">${kc('Match Rate', 'target', '#FFE0E0', '#E5484D', rate == null ? '—' : pct(rate), rate != null && rate < 75 ? 'tint-r' : rate != null && rate >= 90 ? 'tint-g' : '')}${kc('Base Items', 'box', '#E5EDFF', '#2563EB', fn(exp), 'tint-b')}${kc('Physical Found', 'check', '#E6F7EC', '#16A34A', fn(locked ? L.physical_units : units), 'tint-g')}${kc('Short', 'alert', '#FFE0E0', '#E5484D', locked ? fn(L.short_units) + (Number(L.short_units) ? `<span class="shsplit">In transit ${fn(trs)} · Other ${fn(Number(L.short_units) - trs)}</span>` : '') : '—', 'tint-r')}${kc('Excess', 'zap', '#FFF1CC', '#C58A00', locked ? fn(L.excess_units) : '—', 'tint-y')}</div>
-        <div class="dgrid2"><div class="card" style="padding:18px"><b>Variance by Type</b>${locked ? vr('Serialized Short', vb.ser_short, '#E5484D') + vr('Non-Serialized Short', vb.non_short, '#F59E0B') + vr('Serialized Excess', vb.ser_excess, '#2563EB') + vr('Non-Serialized Excess', vb.non_excess, '#14B8A6') : '<p class="muted">Shown after the audit is submitted.</p>'}</div>
-          <div class="card" style="padding:18px"><div class="cardhead"><b>Audit Progress</b>${L ? badge(locked ? 'Completed' : 'In Progress', locked ? 'ok' : 'info') : badge('Not started')}</div><div class="muted">${L ? (locked ? 'Submitted on ' + fdt(L.submitted_at) : 'Started on ' + fdt(L.started_at)) : 'The store has not started its audit.'}</div>
+        <div class="dgrid2"><div class="card" style="padding:18px"><div class="cardhead">${tl('bars', '#E5EDFF', '#2563EB')}<b>Variance by Type</b></div>${locked ? vr('Serialized Short', vb.ser_short, '#E5484D') + vr('Non-Serialized Short', vb.non_short, '#F59E0B') + vr('Serialized Excess', vb.ser_excess, '#2563EB') + vr('Non-Serialized Excess', vb.non_excess, '#14B8A6') : '<p class="muted">Shown after the audit is submitted.</p>'}</div>
+          <div class="card" style="padding:18px"><div class="cardhead">${tl('clock', '#E5EDFF', '#2563EB')}<b>Audit Progress</b>${L ? badge(locked ? 'Completed' : 'In Progress', locked ? 'ok' : 'info') : badge('Not started')}</div><div class="muted">${L ? (locked ? 'Submitted on ' + fdt(L.submitted_at) : 'Started on ' + fdt(L.started_at)) : 'The store has not started its audit.'}</div>
             <div class="hbar" style="height:10px"><i style="flex:${prog};background:#16A34A"></i><i style="flex:${100 - prog};background:#E5E7EB"></i></div><div class="muted">${locked ? 'Version ' + L.version + ' · base ' + fn(exp) + ' units' : 'Counted so far: ' + fn(units) + ' of ' + fn(exp) + ' base units (' + prog + '%)'}</div>
             <a class="btn" style="margin-top:12px" href="#/logs?store=${sid}">${ic('file', 16)} View Audit Log</a></div></div>
-        <div class="card" style="padding:18px;margin-top:14px"><b>Recent Issues</b>${tbl(['Item Code', 'Inventory status', 'Quality', 'Description', 'Type', 'Expected', 'Physical', 'Variance', 'Status'], issues.map(r => { const v = Number(r.physical_qty) - Number(r.expected_qty), sev = r.result === 'SHORT' && Number(r.expected_qty) > 0 && Number(r.short_qty) / Number(r.expected_qty) >= .5;
+        <div class="card" style="padding:18px;margin-top:14px"><div class="cardhead">${tl('alert', '#FFE0E0', '#E5484D')}<b>Recent Issues</b></div>${tbl(['Item Code', 'Inventory status', 'Quality', 'Description', 'Type', 'Expected', 'Physical', 'Variance', 'Status'], issues.map(r => { const v = Number(r.physical_qty) - Number(r.expected_qty), sev = r.result === 'SHORT' && Number(r.expected_qty) > 0 && Number(r.short_qty) / Number(r.expected_qty) >= .5;
           return `<tr><td><b>${esc(r.item_code)}</b></td><td>${esc(r.inventory_status || '—')}</td><td>${esc(r.item_quality || '—')}</td><td>${esc(r.item_description || '')}</td><td>${r.result === 'SHORT' ? 'Short' : 'Excess'}</td><td>${fn(r.expected_qty)}</td><td>${fn(r.physical_qty)}</td><td class="${v < 0 ? 'neg' : 'pos'}">${v > 0 ? '+' : ''}${fn(v)}</td><td>${badge(r.result === 'SHORT' ? (sev ? 'Critical' : 'High') : 'Excess', r.result === 'SHORT' ? 'bad' : 'warn')}</td></tr>`; }).join(''))}</div>`;
     } else if (tab === 'variance' || tab === 'serial' || tab === 'nonserial') { if (!locked) { body.innerHTML = needLocked; return; } await variance(tab); }
     else if (tab === 'history') {

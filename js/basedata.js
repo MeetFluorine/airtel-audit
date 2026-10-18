@@ -43,6 +43,7 @@ PAGES.basedata = async el => {
     const f = e.target.files[0]; if (!f) return; st.file = f; st.res = null; $('bd-s3').innerHTML = '<div class="boot">Reading file…</div>';
     try {
       if (!/\.(xlsx|xls)$/i.test(f.name)) throw new Error('Please upload an .xlsx or .xls file.');
+      await loadXlsx();
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
       const res = bsValidate(bsPickRows(XLSX, wb));
       if (res.missing.length || res.errors.length) logEv('VALIDATION_FAILED', { file: f.name, missing: res.missing, errors: res.errors.length, duplicate_serials: res.dupSerial, blank_codes: res.blankCode, invalid_qty: res.badQty });
