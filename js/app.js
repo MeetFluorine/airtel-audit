@@ -73,7 +73,7 @@ function authShell(kind, right, wide) {
        ${feat('users', 'Quick Registration', 'Simple and secure onboarding')}${feat('check', 'Admin Approval', 'Your account will be reviewed and approved')}${feat('store', 'Access Your Assigned Store', 'Start auditing once approved')}`
     : `<div class="brand2">${LOGO(40)}<div><b>Shadowfax</b><small>Airtel Store Audit Tracker</small></div></div><h2>Powering<br>Airtel Stores<em>with Accuracy</em></h2><p class="tag">Simple. Accurate. Real-Time.</p><p class="desc">Shadowfax's inventory audit platform for a stronger, more connected Airtel network.</p>
        ${feat('trend', 'Real-Time Tracking', 'Monitor audit progress across all stores')}${feat('target', 'Greater Accuracy', 'Reduce discrepancies with digital audits')}${feat('zap', 'Faster Reconciliation', 'Save time and improve operational efficiency')}`;
-  return `<div class="auth2"><div class="auth-l">${left}<div class="scene"></div></div><div class="auth-r"><div class="auth-c ${wide ? 'wide' : ''}"><div class="top">${LOGO(42)}<div><b>Shadowfax</b><small>Airtel Store Audit Tracker</small></div></div>${right}</div></div></div>`;
+  return `<div class="auth2"><div class="auth-l">${left}<div class="scene"></div></div><div class="auth-r"><div class="mhero"><b>Welcome</b><span>Sign in to continue</span></div><div class="auth-c ${wide ? 'wide' : ''}"><div class="top">${LOGO(42)}<div><b>Shadowfax</b><small>Airtel Store Audit Tracker</small></div></div>${right}</div></div></div>`;
 }
 const fld = (id, label, icon, type, ph, extra = '') => `<div class="fld"><label for="${id}">${label}</label><div class="inp">${ic(icon, 18)}<input id="${id}" name="${id}" type="${type}" placeholder="${ph}" ${extra}>${type === 'password' ? `<button type="button" class="eye" data-eye="${id}" aria-label="Show password">${ic('eyeoff', 18)}</button>` : ''}</div></div>`;
 function loginView() {
@@ -142,16 +142,23 @@ function staffSidebar(cur) {
 const bell = () => `<div style="position:relative"><button class="bellb" id="bell" aria-label="Notifications">${ic('bell', 20)}<span class="dot" id="beldot" hidden></span></button><div class="pop" id="pop" hidden></div></div>`;
 function staffTop(cur) {
   const [t, s] = HEAD[cur] || ['', ''];
-  return `<header class="tb"><div class="tb-t">${t ? `<h1>${t}</h1><p>${s}</p>` : ''}</div><div class="tb-r"><div class="chip-i cal"><span class="tile" style="background:#FDE8E8">${ic('cal', 18)}</span><div><small>Audit Cycle</small><b>${esc(S.cycleName || '—')}</b></div></div>${bell()}<a class="avatar" href="#/profile">${esc(initials(S.profile.full_name))}</a></div></header>`;
+  return `<header class="tb"><button type="button" class="mnav" id="mnav" aria-label="Open menu">&#9776;</button><div class="tb-t">${t ? `<h1>${t}</h1><p>${s}</p>` : ''}</div><div class="tb-r"><div class="chip-i cal"><span class="tile" style="background:#FDE8E8">${ic('cal', 18)}</span><div><small>Audit Cycle</small><b>${esc(S.cycleName || '—')}</b></div></div>${bell()}<a class="avatar" href="#/profile">${esc(initials(S.profile.full_name))}</a></div></header>`;
 }
 function storeTop() {
   const st = S.store;
-  return `<header class="tb"><div class="chip-i"><span class="tile">${ic('store', 18)}</span><div><b>${st ? esc(st.code) : '—'}</b><small>${st && st.circles ? esc(st.circles.name) + ' (' + esc(st.circles.code) + ')' : ''}</small></div></div>
+  return `<header class="tb"><button type="button" class="mnav" id="mnav" aria-label="Open menu">&#9776;</button><div class="chip-i"><span class="tile">${ic('store', 18)}</span><div><b>${st ? esc(st.code) : '—'}</b><small>${st && st.circles ? esc(st.circles.name) + ' (' + esc(st.circles.code) + ')' : ''}</small></div></div>
     <div class="tb-r"><div class="cycwrap"><button type="button" class="chip-i cal cyc-btn" id="cyc-btn" aria-haspopup="true" aria-expanded="false" title="See previous audit cycles and their results"><span class="tile">${ic('cal', 18)}</span><div><small>Audit Cycle</small><b id="cyc-name">…</b></div><span class="chev">▾</span></button><div class="cyc-pop" id="cyc-pop" hidden></div></div>${bell()}<a class="avatar" href="#/profile">${esc(initials(S.profile.full_name))}</a></div></header>`;
 }
 function shell(page) {
   const staff = isStaff(), cur = resolvePage(page, staff); S.cur = cur;
-  return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg">${universeLoader()}</div></main></div></div>`;
+  const mtabs = staff ? '' : `<nav class="mtabs" id="mtabs"><a href="#/dashboard" data-mt="dashboard"><span class="mt-ic">${ic('home', 20)}</span>Home</a><a href="#/audit" data-mt="audit"><span class="mt-ic">${ic('barcode', 20)}</span>Scan</a><a href="#/audit?tab=non" data-mt="entry"><span class="mt-ic">${ic('clip', 20)}</span>Entry</a><a href="#/result" data-mt="result"><span class="mt-ic">${ic('trend', 20)}</span>Result</a></nav>`;
+  return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="scrim" id="scrim"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg">${universeLoader()}</div></main>${mtabs}</div></div>`;
+}
+function paintMtabs() {
+  const m = document.getElementById('mtabs'); if (!m) return;
+  const h = location.hash || '';
+  const tab = S.cur === 'dashboard' ? 'dashboard' : S.cur === 'result' ? 'result' : S.cur === 'audit' ? (/tab=non/.test(h) ? 'entry' : 'audit') : '';
+  m.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.mt === tab));
 }
 async function fillTop() {
   try {
@@ -177,6 +184,8 @@ function closeFly() { const f = document.getElementById('fly'); if (f) f.classLi
 // Move between pages WITHOUT redrawing the sidebar / top bar: only the content changes (smooth, no flicker).
 function updateShell(cur) {
   S.cur = cur; closeFly();
+  const app0 = document.querySelector('.app'); if (app0) app0.classList.remove('nav-open');
+  paintMtabs();
   document.querySelectorAll('.sb .nv > a[href]').forEach(x => x.classList.toggle('on', x.getAttribute('href') === '#/' + cur));
   document.querySelectorAll('.sb .nv .grp').forEach(x => x.classList.toggle('on', x.dataset.grp === GROUP_OF[cur]));
   const t = document.querySelector('.tb-t'); if (t && isStaff()) { const [h, s] = HEAD[cur] || ['', '']; t.innerHTML = h ? `<h1>${h}</h1><p>${s}</p>` : ''; }
@@ -187,6 +196,12 @@ function updateShell(cur) {
 }
 function wireShell() {
   const outBtn = document.getElementById('out'); if (outBtn) outBtn.onclick = logout;
+  const app = document.querySelector('.app'), scrim = document.getElementById('scrim');
+  const closeNav = () => app && app.classList.remove('nav-open');
+  const mn = document.getElementById('mnav');
+  if (mn) mn.onclick = e => { e.stopPropagation(); app.classList.toggle('nav-open'); };
+  if (scrim) scrim.onclick = closeNav;
+  document.querySelectorAll('.sb .nv a').forEach(a => a.addEventListener('click', closeNav));
   document.querySelectorAll('[data-grp]').forEach(b => b.onclick = e => { e.stopPropagation(); S.openGroup === b.dataset.grp ? closeFly() : openFly(b); });
   const fly = document.getElementById('fly'); if (fly) fly.onclick = e => { if (e.target.closest('a')) closeFly(); };
   if (S.flyOff) S.flyOff(); const out = () => closeFly(), esc2 = e => { if (e.key === 'Escape') closeFly(); };
@@ -199,7 +214,7 @@ function wireShell() {
   if (isStaff() && typeof wireCycle === 'function') wireCycle();
   const pg = document.getElementById('pg');
   if (pg && PAGES[S.cur]) PAGES[S.cur](pg).catch(e => { console.error(e); pg.innerHTML = '<div class="alert err">Could not load this page. ' + esc(friendlyError(e)) + '</div>'; });
-  fillTop();
+  fillTop(); paintMtabs();
 }
 
 /* ---------- router ---------- */

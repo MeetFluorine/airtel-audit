@@ -70,8 +70,11 @@ PAGES.audit = async el => {
   const { data: c, error } = await sb.rpc('my_audit_context'); if (error) throw error;
   if (!c.cycle) { el.innerHTML = '<div class="card startcard"><h2>No audit is open for your store yet</h2><p class="muted">Your store\'s base data has to be set up first. <a href="#/basedata">Open Base Data</a> to upload it, or ask your administrator.</p></div>'; return; }
   if (!c.session) {
-    el.innerHTML = `<div class="pagehead"><div><h1>Start Audit</h1></div></div><div class="card startcard"><span class="big">${ic('filesearch', 48, 1.5)}</span><p>You are about to start the physical stock audit<br>for <b>${esc(c.store.code)}</b>.</p>
-      <p class="muted" style="font-size:14px">Please ensure you have the physical stock available before starting.</p><div class="btnrow"><a class="btn" href="#/dashboard" style="padding:14px">Cancel</a><button class="btn yel" id="go" style="padding:14px">Start Audit ${ic('arrow', 18)}</button></div></div>`;
+    el.innerHTML = `<div class="pagehead"><div><h1>Start Audit</h1></div></div><div class="card startcard sastart"><span class="sa-ic">${ic('filesearch', 44, 1.5)}</span>
+      <h2>You are about to start<br>the physical stock audit<br>for <b>${esc(c.store.code)}</b>.</h2>
+      <p class="muted">Please ensure you have the physical stock available before starting.</p>
+      <div class="sa-checks"><div>${ic('check', 18)} Base stock is available</div><div>${ic('check', 18)} All material kept ready</div><div>${ic('check', 18)} Verify store details</div></div>
+      <button class="btn yel xl" id="go" style="width:100%">Start Audit ${ic('arrow', 18)}</button><div><a class="sa-cancel" href="#/dashboard">Cancel</a></div></div>`;
     el.querySelector('#go').onclick = e => busy(e.currentTarget, async () => { const r = await sb.rpc('start_audit'); if (r.error) throw r.error; return PAGES.audit(el); }).catch(x => toast(rpcMsg(x), 'err')); return;
   }
   if (c.session.status !== 'IN_PROGRESS') { el.innerHTML = '<div class="card startcard"><span class="big">' + ic('lock', 44, 1.5) + '</span><h2>Audit submitted</h2><p class="muted">This audit is locked and can no longer be changed.</p><a class="btn yel" href="#/result">View result</a></div>'; return; }
@@ -85,8 +88,9 @@ function scanner(el, c) {
   el.innerHTML = `${c.session.reopen_reason ? `<div class="alert warn"><b>Your audit was reopened by an administrator</b> (${fdt(c.session.reopened_at)}): ${esc(c.session.reopen_reason)}. Your earlier counts are kept; add what was missed and submit again.</div>` : ''}
     <div class="scanhead"><div class="tabs seg"><button class="tab on" data-t="ser">Serialized Scan</button><button class="tab" data-t="non">Non-Serialized Entry</button></div>${livePill()}</div>
     <div class="aud"><div class="aud-main">
-      <div id="p-ser" class="card" style="padding:20px"><div class="scan-title"><span class="tile">${ic('barcode', 22)}</span><div><b>Scan Serial Number</b><span>Use barcode scanner or enter manually</span></div></div>
-        <div class="scanwrap"><input id="scan" class="scan-in" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Scan or enter serial number..."><button class="sbtn" id="sfocus" type="button" aria-label="Focus scanner">${ic('scan', 20)}</button></div>
+      <div id="p-ser" class="card" style="padding:20px"><div class="scan-title"><span class="tile">${ic('barcode', 22)}</span><div><b>Scan Serial Number</b><span>Use camera, barcode scanner or enter manually</span></div></div>
+        <div class="scanwrap"><input id="scan" class="scan-in" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Scan or enter serial number..."><button class="sbtn cam" id="scam" type="button" aria-label="Scan with camera" title="Scan with camera">${ic('cam', 20)}</button><button class="sbtn" id="sfocus" type="button" aria-label="Focus scanner">${ic('scan', 20)}</button></div>
+        <div id="camwrap" class="camwrap" hidden><div class="cambox"><div class="camhead"><b>Scan barcode</b><button type="button" id="camclose" aria-label="Close camera">&#10005;</button></div><div class="camview"><div id="camreader"></div><div class="camframe"></div><div class="campop" id="campop" hidden><div class="campop-card" id="campop-card"><b id="campop-t"></b><span id="campop-s"></span></div></div></div><div class="camfoot"><span id="cammsg">Point at barcodes &mdash; scanning continuously</span><button type="button" class="tbtn" id="camtorch" hidden>Torch</button></div></div></div>
         <div id="res" class="resp idle">Ready to scan</div><div style="margin-top:12px"><button class="btn" id="clr" style="width:100%;padding:12px">Clear</button></div>
         <div id="unl" class="resp err" hidden><div class="rt">Serial not found in your store base stock</div><div class="muted" id="unl-s"></div><label for="uc">Please enter Item Code</label><input id="uc" autocomplete="off" placeholder="Item Code"><div class="ma" style="margin-top:10px"><button class="btn" id="unl-skip">Skip</button><button class="btn yel" id="unl-add">Add as Physical Stock</button></div></div><div class="ck" id="ck-ser"></div></div>
       <div id="p-non" class="nsgrid" hidden>
@@ -123,6 +127,12 @@ function scanner(el, c) {
   Q.ui = {
     status: paint, online: b => { if (st.net !== b) { st.net = b; setLive(b); paint(); if (!b) toast('Network connection interrupted. Your scan has been queued.', 'err'); } },
     async done(it, d, err) {
+      /* camera viewfinder: close it only when the user must type something (unlisted serial / error);
+         otherwise show the result as a popup and keep scanning */
+      if (camOpen) {
+        if (err || !d || d.status === 'NOT_FOUND') stopCam();
+        else camPopup(d);
+      }
       if (err) { showRes(it.kind === 'non' ? 'nres' : 'res', 'err', 'Could not save', esc(rpcMsg(err))); recent(it.label, '', 'Error', 'bad'); beep(false); paint(); return focusScan(); }
       if (d.counts) st.counts = d.counts;
       const s = d.status;
@@ -140,12 +150,92 @@ function scanner(el, c) {
         if (code) Q.push({ kind: 'scan', rpc: 'add_unlisted_serial', args: { p_session: sid, p_serial: d.serial, p_item_code: code, p_event: uid() }, label: d.serial }, true); else recent('', d.serial, 'Skipped', '');
       }
       else if (s === 'ADDED') { showRes('nres', d.in_base ? 'ok' : 'warn', `<span>${ic('check', 18)} Added to audit</span>`, rg([['Item Code', d.item_code], ['Added', fn(d.added)], ['Your count for this line', fn(d.entry_total)]]) + (d.in_base ? '' : '<div class="muted">Not in your store base stock: it will be recorded as excess.</div>')); recent(d.item_code, '+' + fn(d.added), 'Added', 'ok'); beep(true); }
-      paint(); focusScan();
+      paint(); if (!camOpen) focusScan();
     }
   };
-  scan.onkeydown = e => { if (e.key !== 'Enter') return; e.preventDefault(); const v = scan.value.trim(); scan.value = ''; if (!v) return; Q.push({ kind: 'scan', rpc: 'scan_serial', args: { p_session: sid, p_serial: v, p_event: uid() }, label: v }); scan.focus(); };
+  scan.onkeydown = e => { if (e.key !== 'Enter') return; e.preventDefault(); const v = scan.value.trim(); scan.value = ''; if (!v) return; Q.push({ kind: 'scan', rpc: 'scan_serial', args: { p_session: sid, p_serial: v, p_event: uid() }, label: v }); if (!camOpen) scan.focus(); };
   $('sfocus').onclick = () => scan.focus(); $('clr').onclick = () => { $('res').className = 'resp idle'; $('res').textContent = 'Ready to scan'; scan.focus(); };
+  /* ---- camera barcode scanner (html5-qrcode: works on Android + iOS, lazy-loaded) ---- */
+  let __qrP = null, camScanner = null, camOpen = false, camCool = 0;
+  function loadQrLib() {
+    if (window.Html5Qrcode) return Promise.resolve();
+    if (!__qrP) __qrP = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js';
+      s.onload = res;
+      s.onerror = () => { __qrP = null; rej(new Error('scanner load failed')); };
+      document.head.appendChild(s);
+    });
+    return __qrP;
+  }
+  const stopCam = async () => {
+    camOpen = false;
+    if (camScanner) { try { await camScanner.stop(); } catch (e) {} try { camScanner.clear(); } catch (e) {} camScanner = null; }
+    const w = $('camwrap'); if (w) w.hidden = true;
+  };
+  /* result popup inside the viewfinder: the camera keeps running, only the popup shows each match */
+  function camPopup(d) {
+    const s = d.status, card = $('campop-card');
+    card.className = 'campop-card ' + (s === 'MATCHED' ? 'ok' : s === 'DUPLICATE' ? 'warn' : 'info');
+    $('campop-t').textContent = s === 'MATCHED' ? '✓ Matched' : s === 'DUPLICATE' ? 'Already scanned' : s === 'UNLISTED_ADDED' ? 'Added as physical stock' : s;
+    $('campop-s').textContent = 'Serial: ' + (d.serial || '');
+    $('campop').hidden = false;
+    clearTimeout(camPopup.t);
+    camPopup.t = setTimeout(() => { const p = $('campop'); if (p) p.hidden = true; }, 2200);
+  }
+  async function startCam() {
+    stopCam();
+    try { await loadQrLib(); }
+    catch (e) { toast('Could not load the barcode scanner. Check your connection and try again, or enter the serial manually.', 'err'); return; }
+    $('cammsg').textContent = 'Point at barcodes — scanning continuously';
+    $('camtorch').hidden = true;
+    $('camwrap').hidden = false;
+    /* let the modal lay out before the scanner measures it — starting too early = black video on some phones */
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    if ($('camwrap').hidden) return;
+    window.addEventListener('hashchange', stopCam, { once: true });
+    const onOk = text => {
+      const v = String(text || '').trim();
+      if (!v || Date.now() < camCool) return;
+      camCool = Date.now() + 1500;
+      $('cammsg').textContent = 'Scanned: ' + v;
+      scan.value = v;
+      scan.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      if (document.activeElement === scan) scan.blur();
+      beep(true);
+    };
+    try {
+      camScanner = new Html5Qrcode('camreader');
+      await camScanner.start({ facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 260, height: 160 }, aspectRatio: 1.333,
+          formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39, Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.DATA_MATRIX] },
+        onOk, () => {});
+    } catch (e) {
+      stopCam();
+      toast('Could not open the camera. Please allow camera access and try again, or enter the serial manually.', 'err');
+      return;
+    }
+    camOpen = true;
+    /* nudge the video to paint on phones that stay black until a tab switch */
+    try {
+      const video = document.querySelector('#camreader video');
+      if (video) { video.setAttribute('playsinline', ''); video.muted = true; video.style.transform = 'translateZ(0)'; try { await video.play(); } catch (e) {} }
+    } catch (e) {}
+    try {
+      const video = document.querySelector('#camreader video');
+      const track = video && video.srcObject && video.srcObject.getVideoTracks()[0];
+      const caps = track && track.getCapabilities ? track.getCapabilities() : {}, torchBtn = $('camtorch');
+      if (caps.torch) {
+        let torchOn = false;
+        torchBtn.hidden = false;
+        torchBtn.onclick = async () => { torchOn = !torchOn; try { await track.applyConstraints({ advanced: [{ torch: torchOn }] }); torchBtn.classList.toggle('on', torchOn); } catch (e) { torchOn = !torchOn; } };
+      }
+    } catch (e) { /* torch optional */ }
+  }
+  $('scam').onclick = startCam;
+  $('camclose').onclick = stopCam;
   el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { el.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('on', x === b)); $('p-ser').hidden = b.dataset.t !== 'ser'; $('p-non').hidden = b.dataset.t !== 'non'; (b.dataset.t === 'ser' ? scan : $('ic')).focus(); });
+  if (/tab=non/.test(location.hash)) { const b = el.querySelector('[data-t="non"]'); if (b) b.click(); }
   // non-serialized: live type-ahead list
   const hl = (txt, v) => { const i = String(txt).toUpperCase().indexOf(v); return i < 0 || !v ? esc(txt) : esc(txt.slice(0, i)) + '<mark>' + esc(txt.slice(i, i + v.length)) + '</mark>' + esc(txt.slice(i + v.length)); };
   const optLabel = (o, v) => `<span class="tile">${ic('box', 18)}</span><span><b>${hl(o.item_code, v)}</b> <span class="muted">${esc([o.inventory_status, o.item_quality].filter(Boolean).join(' · '))}</span><br><span class="muted">${esc(o.item_description || '')} ${o.item_uom ? '(' + esc(o.item_uom) + ')' : ''}</span></span>`;

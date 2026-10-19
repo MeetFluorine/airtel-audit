@@ -305,3 +305,97 @@ html,body{height:100%;overflow:hidden}
 .auth2{grid-template-rows:minmax(0,1fr)}
 .auth-r{align-items:flex-start;justify-content:flex-start}
 .auth-c{margin:auto}
+
+/* ---------- mobile: navigation drawer ---------- */
+.mnav{display:none;width:42px;height:42px;border:1px solid #E3ECE8;background:#fff;border-radius:12px;align-items:center;justify-content:center;cursor:pointer;color:#0F1F1A;font-size:20px;flex-shrink:0}
+.scrim{display:none}
+@media(max-width:900px){
+  .mnav{display:inline-flex}
+  .sb,.sb.store{position:fixed;left:0;top:0;bottom:0;z-index:150;width:min(300px,84vw);height:100dvh;transform:translateX(-105%);transition:transform .25s ease;box-shadow:none}
+  .app.nav-open .sb,.app.nav-open .sb.store{transform:none;box-shadow:0 0 44px rgba(0,0,0,.35)}
+  .scrim{display:block;position:fixed;inset:0;background:rgba(2,20,14,.5);z-index:140;opacity:0;pointer-events:none;transition:opacity .25s ease}
+  .app.nav-open .scrim{opacity:1;pointer-events:auto}
+  .main2{min-width:0}
+}
+
+/* ---------- mobile: auth pages ---------- */
+@media(max-width:900px){
+  .auth2{grid-template-columns:1fr;padding:12px;gap:0}
+  .auth-l{display:none}
+  .auth-c{padding:26px 22px;max-width:100%;border-radius:20px}
+  .auth-c.wide{max-width:100%}
+}
+
+/* ---------- mobile: store dashboard hero ---------- */
+@media(max-width:640px){
+  .hero2{background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,255,255,.88) 55%,rgba(255,255,255,.45) 100%),#fff url(../assets/banner.jpg) right bottom/300px auto no-repeat;min-height:0;padding:20px 16px}
+  .hero2 h1{font-size:22px}
+  .hero2 .hp{font-size:13.5px;max-width:100%}
+}
+
+/* ---------- mobile: inputs, touch targets ---------- */
+@media(max-width:900px){
+  input,select,textarea{font-size:16px}
+  .scanwrap .scan-in{font-size:17px}
+  .btn{min-height:44px}
+  .tab{min-height:40px}
+}
+
+/* ---------- camera barcode scanner ---------- */
+.scanwrap .sbtn.cam{right:54px;background:#FFD135;border-color:#E5B800}
+.scanwrap .scan-in{padding-right:106px}
+.camwrap{position:fixed;inset:0;z-index:200;background:rgba(2,20,14,.92);display:flex;align-items:center;justify-content:center;padding:16px}
+.camwrap[hidden]{display:none}
+.cambox{width:100%;max-width:480px;background:#0B2A1F;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.camhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;color:#fff}
+.camhead b{font-size:15px}
+.camhead button{background:rgba(255,255,255,.12);border:0;color:#fff;width:36px;height:36px;border-radius:50%;font-size:16px;cursor:pointer}
+.camview{position:relative;background:#000;aspect-ratio:4/3}
+#camreader{width:100%;height:100%}
+#camreader video{width:100%!important;height:100%!important;object-fit:cover!important;display:block}
+.camframe{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.camframe::before{content:"";width:70%;height:46%;border:3px solid #FFD135;border-radius:14px;box-shadow:0 0 0 4000px rgba(0,0,0,.25)}
+.camfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px}
+.camfoot span{color:#D5E9DF;font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.camfoot .tbtn{background:rgba(255,255,255,.12);border:0;color:#fff;border-radius:99px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+.camfoot .tbtn.on{background:#FFD135;color:#0F1F1A}
+
+/* ---------- camera result popup (inside the viewfinder) ---------- */
+.campop{position:absolute;top:14px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:5}
+.campop[hidden]{display:none}
+.campop-card{background:#fff;border-radius:14px;padding:11px 18px;box-shadow:0 8px 24px rgba(0,0,0,.45);text-align:center;min-width:200px;max-width:86%;animation:campopin .22s ease}
+@keyframes campopin{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+.campop-card b{display:block;font-size:15px}
+.campop-card span{display:block;font-size:12.5px;color:#5A6B65;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.campop-card.ok b{color:#137A3F}.campop-card.warn b{color:#A16207}.campop-card.info b{color:#1D4ED8}
+
+/* ---------- mobile bottom tab bar (store users) ---------- */
+.mtabs{display:none}
+@media(max-width:900px){
+  .mtabs{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:120;background:#fff;border-top:1px solid #E3ECE8;padding:8px 6px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -4px 18px rgba(2,37,27,.06)}
+  .mtabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;color:#8AA096;font-size:11px;font-weight:600;text-decoration:none;padding:4px 2px;border-radius:12px;min-width:0}
+  .mtabs a .mt-ic{width:46px;height:30px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+  .mtabs a.on{color:#0F1F1A}
+  .mtabs a.on .mt-ic{background:#FFD135;color:#0F1F1A}
+  .app .page2{padding-bottom:96px}
+}
+
+/* ---------- mobile auth hero banner ---------- */
+.mhero{display:none}
+@media(max-width:900px){
+  .auth-r{display:block;padding:12px;margin-left:0}
+  .mhero{display:block;border-radius:20px;background:#0B2A1F url(../assets/banner.jpg) center/cover;color:#fff;padding:30px 22px;margin-bottom:14px;position:relative;overflow:hidden}
+  .mhero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,20,14,.45),rgba(2,20,14,.72))}
+  .mhero b,.mhero span{position:relative}
+  .mhero b{display:block;font-size:24px;font-weight:800}
+  .mhero span{font-size:13.5px;color:#D5E9DF}
+}
+
+/* ---------- start-audit confirmation (mobile design) ---------- */
+.sastart{max-width:520px;padding:28px 24px}
+.sastart h2{font-size:19px;line-height:1.5;margin:14px 0 8px;color:#0F1F1A}
+.sa-ic{display:inline-flex;width:76px;height:76px;border-radius:22px;background:#FFF6DC;color:#C9930A;align-items:center;justify-content:center}
+.sa-checks{display:flex;flex-direction:column;gap:10px;margin:18px 0 22px;text-align:left}
+.sa-checks div{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:#0F1F1A}
+.sa-checks .ic{color:#137A3F;flex-shrink:0}
+.sa-cancel{display:inline-block;margin-top:14px;color:#6B7B75;font-weight:600;text-decoration:none;font-size:14px}
