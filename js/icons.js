@@ -32,7 +32,11 @@ const ICON = {
   cloud: '<path d="M7 18a4.5 4.5 0 0 1-.6-9A6 6 0 0 1 18 9.5 4 4 0 0 1 17.5 18z"/><path d="m9.5 13.5 2 2 3.5-3.5"/>',
   sync: '<path d="M4 11a8 8 0 0 1 14-4l2 2M20 5v4h-4M20 13a8 8 0 0 1-14 4l-2-2M4 19v-4h4"/>',
   filesearch: '<path d="M6 3h8l4 4v6"/><path d="M14 3v4h4"/><path d="M6 3v18h6"/><circle cx="16" cy="17" r="3"/><path d="m18.2 19.2 2.3 2.3"/>',
-  barcode: '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M18 6v12M20.5 6v12" stroke-width="1.8"/>'
+  barcode: '<path d="M4 6v12M7 6v12M11 6v12M14 6v12M18 6v12M20.5 6v12" stroke-width="1.8"/>',
+  db: '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13"/><path d="M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8"/>',
+  pie: '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+  trophy: '<path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5.5h2.5v1.5a3 3 0 0 1-3 3M7 5.5H4.5V7a3 3 0 0 0 3 3"/>'
 };
 const ic = (n, s = 18, w = 1.8) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n] || ''}</svg>`;
 const LOGO = (s = 34) => `<svg width="${s}" height="${s}" viewBox="0 0 40 40" aria-hidden="true"><path d="M4 9.5 35 3.5 24.5 35.5 18.2 21.8Z" fill="#FFC72C" stroke="#FFC72C" stroke-width="2.4" stroke-linejoin="round"/><path d="M18.2 21.8 35 3.5" stroke="#E5A800" stroke-width="1.2" stroke-linecap="round" opacity=".6"/></svg>`;

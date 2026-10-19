@@ -106,3 +106,33 @@ function loadXlsx() {
   });
   return __xlsxP;
 }
+
+/* Universal loading screen: the Shadowfax "orbit" animation. Replaces page
+   content while data loads (sidebar + topbar stay visible). Same component on
+   every page - universal wording only ("Loading..."), never page-specific. */
+function universeLoader() {
+  const chip = (n, x, y, d) => `<span class="uic" style="--x:${x};--y:${y};--d:${d}s">${ic(n, 17, 2)}</span>`;
+  return `<div class="uload" role="status" aria-label="Loading">
+  <div class="ustage">
+    <svg class="ur" viewBox="0 0 340 240" aria-hidden="true">
+      <ellipse class="uring" cx="170" cy="120" rx="150" ry="80"/>
+      <ellipse class="uring" cx="170" cy="120" rx="108" ry="108"/>
+      <ellipse class="uring" cx="170" cy="120" rx="162" ry="56"/>
+      <circle class="upt" r="3.4" opacity=".9"><animateMotion dur="12s" repeatCount="indefinite" path="M20,120 a150,80 0 1,0 300,0 a150,80 0 1,0 -300,0"/></circle>
+      <circle class="upt" r="2.6" opacity=".55"><animateMotion dur="18s" begin="-7s" repeatCount="indefinite" path="M20,120 a150,80 0 1,0 300,0 a150,80 0 1,0 -300,0"/></circle>
+      <circle class="upt" r="3" opacity=".75"><animateMotion dur="9s" begin="-3s" repeatCount="indefinite" path="M62,120 a108,108 0 1,0 216,0 a108,108 0 1,0 -216,0"/></circle>
+      <circle class="upt" r="2.4" opacity=".5"><animateMotion dur="14s" begin="-5s" repeatCount="indefinite" path="M8,120 a162,56 0 1,0 324,0 a162,56 0 1,0 -324,0"/></circle>
+      <circle class="upt" r="2.2" opacity=".65"><animateMotion dur="21s" begin="-12s" repeatCount="indefinite" path="M8,120 a162,56 0 1,0 324,0 a162,56 0 1,0 -324,0"/></circle>
+    </svg>
+    <div class="ucore">${LOGO(38)}</div>
+    ${chip('bars', '9%', '39%', 0)}
+    ${chip('gear', '18%', '50%', .8)}
+    ${chip('db', '82%', '50%', 1.6)}
+    ${chip('file', '86%', '69%', 2.4)}
+    ${chip('clip', '34%', '72%', 3.2)}
+    ${chip('pie', '66%', '28%', 4)}
+  </div>
+  <div class="ubar"><i></i></div>
+  <div class="utxt">Loading...</div>
+</div>`;
+}

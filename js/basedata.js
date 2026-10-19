@@ -40,7 +40,7 @@ PAGES.basedata = async el => {
   const logEv = (type, meta) => sb.rpc('log_upload_event', { p_type: type, p_store: storeId, p_cycle: st.cycle, p_upload: null, p_meta: meta }).then(() => {}, () => {});
 
   $('bd-file').onchange = async e => {
-    const f = e.target.files[0]; if (!f) return; st.file = f; st.res = null; $('bd-s3').innerHTML = '<div class="boot">Reading file…</div>';
+    const f = e.target.files[0]; if (!f) return; st.file = f; st.res = null; $('bd-s3').innerHTML = universeLoader();
     try {
       if (!/\.(xlsx|xls)$/i.test(f.name)) throw new Error('Please upload an .xlsx or .xls file.');
       await loadXlsx();

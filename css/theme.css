@@ -1,7 +1,7 @@
 /* Shadowfax x Airtel theme. Colours sampled from the supplied designs; hardcoded hex values (no CSS variables). */
 body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#F1F6F4;color:#0F1F1A}
 a{color:#1B834C}
-h1{font-size:24px;letter-spacing:-.3px;font-weight:800;color:#0B2A1F}h2{color:#0B2A1F}
+h1{font-size:20px;letter-spacing:-.3px;font-weight:800;color:#0B2A1F}h2{color:#0B2A1F}
 .muted{color:#6B7B75}
 .ic{vertical-align:-3px;flex-shrink:0}
 /* buttons */
@@ -169,6 +169,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid #FFE48A;border-color:#
 .pg{display:flex;gap:6px;align-items:center}.pg button{min-width:34px;height:34px;border-radius:9px;border:1px solid #E3ECE8;background:#fff;cursor:pointer;font-weight:600;font-family:inherit}.pg button.on{background:#FFD135;border-color:#FFD135}.pg button:disabled{opacity:.4;cursor:default}
 .eyeb{width:34px;height:34px;border:1px solid #E3ECE8;background:#fff;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:#44564F;cursor:pointer;text-decoration:none}
 .sdhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.sdnav{display:inline-flex;gap:6px;margin-left:2px}
 .vbar{display:grid;grid-template-columns:150px 1fr 46px;gap:10px;align-items:center;margin:9px 0;font-size:13px}.vbar .tr{height:16px;background:#EEF3F1;border-radius:6px;overflow:hidden}.vbar .tr i{display:block;height:100%;border-radius:6px}
 .reprow{display:grid;grid-template-columns:1.3fr 2fr .7fr auto;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid #F1F6F4}.reprow:last-child{border:0}
 .reprow b{display:flex;align-items:center;gap:10px}.reprow .tile{width:34px;height:34px;border-radius:10px;background:#E8F5EE;color:#16A34A;display:inline-flex;align-items:center;justify-content:center}
@@ -202,10 +203,10 @@ html,body{overflow-x:hidden}
 .tbl{width:100%}.tbl td,.tbl th{white-space:nowrap}.tbl td.wrap{white-space:normal;min-width:200px;max-width:340px;line-height:1.45}
 @media(max-width:1100px){.aud,.resgrid,.dash2,.nsgrid,.acctgrid,.profgrid{grid-template-columns:minmax(0,1fr)}}
 /* type scale */
-body{font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-h1{font-size:22px}h2{font-size:18px}h3{font-size:15px}
+body{font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased}
+h1{font-size:20px}h2{font-size:16px}h3{font-size:14px}
 label{font-size:12.5px;font-weight:600;color:#44564F;letter-spacing:.1px}
-.tbl{font-size:13px}.tbl th{font-size:12px;font-weight:600;padding:11px 14px;color:#5B6B65}.tbl td{padding:12px 14px}
+.tbl{font-size:13px}.tbl th{font-size:12px;font-weight:600;padding:9px 12px;color:#5B6B65}.tbl td{padding:10px 12px}
 .bd{font-size:12px;font-weight:600;border-radius:7px;padding:3px 9px}
 .tab{font-size:13.5px;padding:9px 16px;font-weight:600}.tabs.seg .tab{padding:9px 16px}
 .nv a,.nv .grp{font-size:14px}.nv .sub a{font-size:13px}
@@ -227,7 +228,7 @@ input:disabled,select:disabled{background-color:#F3F7F5;color:#6B7B75;cursor:not
 .qty{align-items:stretch}.qty input{height:48px;font-size:18px;border:0;border-radius:0}.qty button{height:48px;width:54px}
 .opt{font-size:13.5px}.opt b{font-size:14px}
 .filters label{font-size:12px}.filters select,.filters input{min-width:140px}
-.sdhead h1{font-size:22px}.pagehead h1{font-size:22px}
+.sdhead h1{font-size:20px}.pagehead h1{font-size:20px}
 .tb-t h1{font-size:22px}.hero h1{font-size:26px}
 .chip-i b{font-size:14px}.chip-i small{font-size:11.5px}
 /* result page: summary panel */

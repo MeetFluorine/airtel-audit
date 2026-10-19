@@ -83,11 +83,6 @@ if (!window.__adHashWired) { window.__adHashWired = true; window.addEventListene
 async function adminDash(el) {
   if (!S.cycleId) { adRemoveSearch(); return noCycle(el); }
   const cid = S.cycleId, AD = { metric: 'short', range: 6, f: null, trend: [], kpiTrend: [], note: false, breakdown: null }, num = v => Number(v) || 0, share = (v, tot) => tot ? 100 * v / tot : 0;
-  const [o, s] = await Promise.all([sb.rpc('dash_overview', { p_cycle: cid }), sb.rpc('dash_stores', { p_cycle: cid })]);
-  try { const b = await sb.rpc('dash_shortage_breakdown', { p_cycle: cid }); if (!b.error) AD.breakdown = b.data; } catch (e) { /* 24 not run yet: legend shows the total only */ }
-  if (o.error) throw o.error; if (s.error) throw s.error;
-  const rowsAll = s.data, circleOf = Object.fromEntries(rowsAll.map(r => [r.store_id, r.circle]));
-  const heads = [...o.data.heads].sort((a, b) => num(b.stores) - num(a.stores) || String(a.label).localeCompare(b.label)).slice(0, 5);
 
   /* ---- trend data (all circles, or only the selected circles when filtered; cached) ---- */
   const cache = {};
@@ -102,7 +97,19 @@ async function adminDash(el) {
   async function loadBreakdown() { const c = AD.f ? AD.f.circles : null;
     try { const b = await sb.rpc('dash_shortage_breakdown', { p_cycle: cid, p_circles: c }); AD.breakdown = b.error ? null : b.data; }
     catch (e) { AD.breakdown = null; } }
-  await loadTrends();
+
+  /* One wave for everything the first paint needs (used to be 3 sequential waves:
+     overview+stores, then the shortage split, then the two trend queries). */
+  const pO = sb.rpc('dash_overview', { p_cycle: cid });
+  const pS = sb.rpc('dash_stores', { p_cycle: cid });
+  const pB = sb.rpc('dash_shortage_breakdown', { p_cycle: cid }).then(r => r, () => null);  // 24 not run yet / failed: legend shows the total only
+  const pT = loadTrends().then(() => null, e => { throw e; });
+  const [o, s] = await Promise.all([pO, pS]);
+  if (o.error) throw o.error; if (s.error) throw s.error;
+  const b = await pB; if (b && !b.error) AD.breakdown = b.data;
+  await pT;
+  const rowsAll = s.data, circleOf = Object.fromEntries(rowsAll.map(r => [r.store_id, r.circle]));
+  const heads = [...o.data.heads].sort((a, b) => num(b.stores) - num(a.stores) || String(a.label).localeCompare(b.label)).slice(0, 5);
 
   const r1 = v => Math.round(v * 10) / 10, p1 = v => r1(v).toFixed(1);
   const pal = [['#E8EAED', '#44525F'], ['#EAE5FF', '#5B3FD9'], ['#FCE3E3', '#C42B2B'], ['#DDEBFF', '#1D5FD8'], ['#FFEFC2', '#B7791F']];
@@ -294,11 +301,13 @@ PAGES.storeaudit = async el => {
 /* ================= STORE DETAIL (drill-down) ================= */
 PAGES.storedetail = async el => {
   if (!isStaff()) { el.innerHTML = '<div class="card startcard"><h2>Not available</h2></div>'; return; }
-  const hq = new URLSearchParams(location.hash.split('?')[1] || ''), sid = hq.get('s'), cid = hq.get('c') || S.cycleId, cyc = S.cycles.find(c => c.id === cid) || { name: S.cycleName };
-  const [st, ss, up] = await Promise.all([sb.from('stores').select('id,code,name,store_type,locator,circles(code,name)').eq('id', sid).maybeSingle(),
+  const hq = new URLSearchParams(location.hash.split('?')[1] || ''), sid = hq.get('s'), cid = hq.get('c') || S.cycleId, from = hq.get('from'), cyc = S.cycles.find(c => c.id === cid) || { name: S.cycleName };
+  const backTo = from === 'ranking' ? '#/ranking' : '#/storeaudit', fromQ = from === 'ranking' ? '&from=ranking' : '';
+  const [st, ss, up, dsl] = await Promise.all([sb.from('stores').select('id,code,name,store_type,locator,circles(code,name)').eq('id', sid).maybeSingle(),
     sb.from('audit_sessions').select('id,version,status,started_by,started_at,submitted_by,submitted_at,reopened_by,reopened_at,reopen_reason,expected_units,physical_units,matched_units,short_units,excess_units').eq('audit_cycle_id', cid).eq('store_id', sid).order('version'),
-    sb.from('base_stock_uploads').select('version,rows_valid,serialized_count,non_serialized_count,expected_units,frozen_at,source_file_name').eq('audit_cycle_id', cid).eq('store_id', sid).eq('status', 'FROZEN').maybeSingle()]);
-  if (!st.data) { el.innerHTML = '<div class="card startcard"><h2>Store not found</h2><p class="muted">It may be outside your circles.</p><a class="btn" href="#/storeaudit">← Back to List</a></div>'; return; }
+    sb.from('base_stock_uploads').select('version,rows_valid,serialized_count,non_serialized_count,expected_units,frozen_at,source_file_name').eq('audit_cycle_id', cid).eq('store_id', sid).eq('status', 'FROZEN').maybeSingle(),
+    sb.rpc('dash_stores', { p_cycle: cid })]);
+  if (!st.data) { el.innerHTML = `<div class="card startcard"><h2>Store not found</h2><p class="muted">It may be outside your circles.</p><a class="btn" href="${backTo}">← Back to List</a></div>`; return; }
   if (ss.error) throw ss.error;
   const store = st.data, sess = ss.data, base = up.data, L = sess.filter(x => x.status !== 'REOPENED').slice(-1)[0] || null, locked = L && L.status === 'LOCKED';
   const ids = [...new Set(sess.flatMap(x => [x.started_by, x.submitted_by, x.reopened_by]).filter(Boolean))];
@@ -306,8 +315,13 @@ PAGES.storedetail = async el => {
   const who = id => id ? (names[id] || 'Administrator') : '—';
   const rate = locked && L.expected_units > 0 ? Math.round(1000 * L.matched_units / L.expected_units) / 10 : null, hl = healthOf(rate);
   const stat = !L ? badge('Not started') : locked ? (hl ? badge(hl[0], hl[1]) : badge('Completed', 'ok')) : badge('In progress', 'info');
+  // prev / next store navigation (dash_stores is already ordered by circle, code and respects staff scope)
+  const navRows = (dsl.data || []).map(r => ({ id: r.store_id, code: r.code }));
+  const ni = navRows.findIndex(r => r.id === sid);
+  const nPrev = ni > 0 ? navRows[ni - 1] : null, nNext = ni >= 0 && ni < navRows.length - 1 ? navRows[ni + 1] : null;
+  const nBtn = (r, label) => r ? `<a class="btn sm" href="#/storedetail?s=${r.id}&c=${cid}${fromQ}" title="${esc(r.code)}">${label}</a>` : `<span class="btn sm" style="opacity:.45;pointer-events:none" aria-disabled="true">${label}</span>`;
   let tab = 'overview'; const PS = 50;
-  el.innerHTML = `<div class="sdhead"><div><a class="btn sm" href="#/storeaudit" style="margin-bottom:10px">${ic('back', 15)} Back to List</a><div style="display:flex;align-items:center;gap:12px"><h1 style="margin:0">${esc(store.code)}</h1>${stat}</div>
+  el.innerHTML = `<div class="sdhead"><div><a class="btn sm" href="${backTo}" style="margin-bottom:10px">${ic('back', 15)} Back to List</a><div style="display:flex;align-items:center;gap:12px"><h1 style="margin:0">${esc(store.code)}</h1>${stat}<span class="sdnav">${nBtn(nPrev, '‹ Prev')}${nBtn(nNext, 'Next ›')}</span></div>
       <p class="muted" style="margin:4px 0 0">${esc(store.circles?.code || '')} Circle &nbsp;|&nbsp; ${esc(store.store_type || '—')} Store &nbsp;|&nbsp; Audit Cycle: ${esc(cyc.name)}</p></div>
       <div class="row">${locked ? `<a class="btn" href="#/result?sess=${L.id}">${ic('clip', 16)} Full reconciliation</a><button class="btn danger-o" id="reopen">${ic('alert', 15)} Reopen audit</button>` : ''}<a class="btn" href="#/basestock?s=${sid}">${ic('box', 15)} ${base ? 'Revise base stock' : 'Upload base stock'}</a>
         <button class="btn yel" id="dlr" ${locked ? '' : 'disabled'}>${ic('dl', 16)} Download Report</button></div></div>
@@ -316,7 +330,7 @@ PAGES.storedetail = async el => {
   const tl = (i, bg, fg) => `<span class="tile" style="background:${bg};color:${fg}">${ic(i, 18)}</span>`;
 
   async function show() {
-    el.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); body.innerHTML = '<div class="boot">Loading…</div>';
+    el.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab)); body.innerHTML = universeLoader();
     if (tab === 'overview') {
       let vb = { ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, issues = [], units = 0, pend = null, trs = 0;
       if (locked) { const [a, b, rsm] = await Promise.all([sb.rpc('store_variance_breakdown', { p_session: L.id }), sb.from('reconciliation_results').select('item_code,inventory_status,item_quality,item_description,is_serialized,expected_qty,physical_qty,short_qty,result').eq('session_id', L.id).neq('result', 'MATCH').order('short_qty', { ascending: false }).limit(5), sb.rpc('result_summary', { p_session: L.id })]); vb = a.data || vb; issues = b.data || []; trs = Number((rsm.data && rsm.data.short_transit) || 0); }

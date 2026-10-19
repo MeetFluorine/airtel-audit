@@ -1,4 +1,4 @@
-// Ranking: store user = own circle / India rank; circle head = his stores' ranks; admin = all stores, all circles, top store per circle.
+// Ranking: store user = own circle / India rank; circle head = his stores' ranks; admin = all stores, all circles, Top 3 India podium.
 // All numbers come from the server functions rank_my_store() / rank_staff() (database/18_ranking.sql); nothing is calculated here except display.
 const rkPts = n => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const rkPct = v => v == null ? '—' : Number(v).toFixed(3).replace(/\.?0+$/, '') + '%';
@@ -22,7 +22,81 @@ PAGES.ranking = async el => {
       <td>${c.done ? rkPts(c.short) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td><b>${rkPts(c.points)}</b></td></tr>`).join('')) : '<p class="muted">No audit cycle yet.</p>'}</div>${rkHow()}`;
 };
 
-// ---- small inline icons for the top-store card ----
+// ---- a table over already-loaded rows: click a heading to sort (A to Z / Z to A, low to high / high to low). No filters. ----
+// cols: [{ k, l, t: 'num' | 'text', w: column width in %, get: row => value, cell: row => html }]; S = { sort: null | { k, dir } } is kept between redraws.
+// Percentage widths + wrapping text: the table always fits the page width, so there is no sideways scrolling.
+// Sort helper shared by the grid renderer and pagination (sort the full row set, then slice the page).
+function rkSorted(cols, rows, S) {
+  let out = rows.slice();
+  if (S.sort) { const c = cols.find(x => x.k === S.sort.k); if (!c) return out; const dir = S.sort.dir === 'desc' ? -1 : 1;
+    out = out.map((r, i) => [r, i]).sort((A, B) => { const x = c.get(A[0]), y = c.get(B[0]), nx = x == null || x === '', ny = y == null || y === '';
+      if (nx || ny) return nx && ny ? A[1] - B[1] : nx ? 1 : -1;                 // blanks always last
+      const d = c.t === 'num' ? Number(x) - Number(y) : String(x).localeCompare(String(y), undefined, { sensitivity: 'base', numeric: true });
+      return d * dir || A[1] - B[1]; }).map(p => p[0]); }
+  return out;
+}
+function rkGrid(cols, rows, S, emptyMsg) {
+  const out = rkSorted(cols, rows, S);
+  const arrow = c => !S.sort || S.sort.k !== c.k ? '⇅' : S.sort.dir === 'asc' ? '↑' : '↓';
+  const tip = c => c.t === 'num' ? 'Sort low to high, then high to low' : 'Sort A to Z, then Z to A';
+  const head = c => { if (!c.l) return ''; if (c.ns) return esc(c.l);
+    return `<span class="srt ${S.sort && S.sort.k === c.k ? 'on' : ''}" data-sort="${c.k}" title="${tip(c)}">${esc(c.l)}<i>${arrow(c)}</i></span>`; };
+  return `<div class="tw rkw"><table class="tbl rkt"><colgroup>${cols.map(c => `<col style="width:${c.w}%">`).join('')}</colgroup>
+    <thead><tr>${cols.map(c => `<th>${head(c)}</th>`).join('')}</tr></thead>
+    <tbody>${out.map(r => `<tr>${cols.map(c => `<td>${c.cell(r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` + (out.length ? '' : `<p class="muted" style="padding:6px 4px">${emptyMsg}</p>`);
+}
+// NOTE: must NOT return false here - a false return from an onclick handler cancels
+// the default action, which broke the eye/detail links inside the table.
+const rkSortClick = (e, S, redraw) => { const h = e.target.closest('[data-sort]'); if (!h) return; const k = h.dataset.sort;
+  S.sort = !S.sort || S.sort.k !== k ? { k, dir: 'asc' } : S.sort.dir === 'asc' ? { k, dir: 'desc' } : null; redraw(); };
+
+async function rankStaff(el) {
+  const { data: d, error } = await sb.rpc('rank_staff'); if (error) throw error;
+  const admin = d.role === 'ADMIN', stores = d.stores || [], circles = d.circles || [];
+  const tabs = admin ? [['stores', 'Stores (India)', 'store'], ['circles', 'Circles', 'grid'], ['top', 'Top store of each circle', 'trophy']]
+    : [['stores', 'Stores', 'store'], ['circles', circles.length > 1 ? 'My circles' : 'My circle', 'grid']];
+  const F = { tab: 'stores', q: '', c: '', page: 1, ps: 10 }, ranked = s => s.cycles_done > 0, cs = [...new Set(stores.map(s => s.circle))].sort();
+  // Pan-India Top 3 (admin only): the three best-ranked stores across all circles
+  const top3 = admin ? stores.filter(ranked).sort((a, b) => a.pan_rank - b.pan_rank || String(a.code).localeCompare(String(b.code))).slice(0, 3) : [];
+  const crown = r => `<svg class="crown c${r}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.8 7.2 7.2 10.8l4.8-6 4.8 6 4.4-3.6-2 10.8H4.8z"/><rect x="4.8" y="19" width="14.4" height="2" rx="1"/></svg>`;
+  const topCard = (s, r) => `<div class="rpc2 w${r}">${crown(r)}<span class="rk r${r}">${r}</span><div class="rpc2-store"><b>${esc(s.code)}</b><span>${esc(s.name)}</span></div><span class="rpc2-circle">${esc(s.circle)}</span><div class="rpc2-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>`;
+  const podium = top3.length ? `<section class="rkpod2"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores <small>Pan India (Current Cycle)</small></b><span>Based on total points</span></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp2-row">${top3.map((s, i) => topCard(s, i + 1)).join('')}</div></section>` : '';
+  const SC = [
+    { k: 'circle_rank', w: 7, l: 'Rank (Circle)', t: 'num', get: s => s.circle_rank, cell: s => rkPill(s.circle_rank, ranked(s)) },
+    { k: 'pan_rank', w: 7, l: 'Rank (India)', t: 'num', get: s => s.pan_rank, cell: s => rkPill(s.pan_rank, ranked(s)) },
+    { k: 'store', w: 16, l: 'Store', t: 'text', get: s => s.code + ' ' + s.name, cell: s => `<b>${esc(s.code)}</b><div class="muted" style="font-size:12px">${esc(s.name)}</div>` },
+    { k: 'circle', w: 6, l: 'Circle', t: 'text', get: s => s.circle, cell: s => esc(s.circle) },
+    { k: 'points', w: 7, l: 'Points', t: 'num', get: s => s.points, cell: s => `<b>${rkPts(s.points)}</b>` },
+    { k: 'cycles_done', w: 8, l: 'Cycles done', t: 'num', get: s => s.cycles_done, cell: s => `${s.cycles_done} of ${s.cycles_held}` },
+    { k: 'short', w: 8, l: 'Short (all)', t: 'num', get: s => s.short, cell: s => rkPts(s.short) },
+    { k: 'short_transit', w: 8, l: 'In transit', t: 'num', get: s => s.short_transit, cell: s => rkPts(s.short_transit) },
+    { k: 'short_other', w: 8, l: 'Other status', t: 'num', get: s => s.short_other, cell: s => rkPts(s.short_other) },
+    { k: 'counted_short_pct', w: 11, l: 'Counted shortage %', t: 'num', get: s => rkCpct(s), cell: s => rkPct(rkCpct(s)) },
+    { k: 'go', w: 14, l: 'Action', ns: true, t: 'text', get: () => '', cell: s => `<span class="rk-act"><a class="rk-view" href="#/storedetail?s=${s.id}&from=ranking">${ic('eye', 14)} View</a><span class="rk-dw"><button type="button" class="rk-dots" data-dot="${s.id}" title="More actions">&#8942;</button><span class="rk-dmenu" hidden><a href="#/storedetail?s=${s.id}&from=ranking">View audit detail</a></span></span></span>` }];
+  const CC = [
+    { k: 'circle_rank', w: 9, l: 'Circle rank', t: 'num', get: c => c.circle_rank, cell: c => rkPill(c.circle_rank, c.cycles_done > 0) },
+    { k: 'circle', w: 10, l: 'Circle', t: 'text', get: c => c.circle, cell: c => `<b>${esc(c.circle)}</b>` },
+    { k: 'stores', w: 7, l: 'Stores', t: 'num', get: c => c.stores, cell: c => c.stores },
+    { k: 'avg_points', w: 11, l: 'Avg points / store', t: 'num', get: c => c.avg_points, cell: c => `<b>${rkPts(c.avg_points)}</b>` },
+    { k: 'participation_pct', w: 11, l: 'Participation', t: 'num', get: c => c.participation_pct, cell: c => c.participation_pct == null ? '\u2014' : c.participation_pct + '%' },
+    { k: 'short_transit', w: 12, l: 'Short in transit', t: 'num', get: c => c.short_transit, cell: c => rkPts(c.short_transit) },
+    { k: 'short_other', w: 12, l: 'Short other status', t: 'num', get: c => c.short_other, cell: c => rkPts(c.short_other) },
+    { k: 'counted_short_pct', w: 13, l: 'Counted shortage %', t: 'num', get: c => rkCpct(c), cell: c => rkPct(rkCpct(c)) },
+    { k: 'top_store', w: 15, l: 'Top store', t: 'text', get: c => c.top_store, cell: c => c.top_store ? esc(c.top_store) + ' <span class="muted">(' + rkPts(c.top_points) + ' pts)</span>' : '\u2014' }];
+  const SS = { sort: null }, CS = { sort: null };       // sort + filters survive tab switches
+  let lastRows = [];
+  const slug = s => String(s || '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  async function exportRanking() {
+    if (!lastRows.length) { toast('Nothing to export.', 'warn'); return; }
+    try { await loadXlsx(); } catch (e) { toast(e.message || 'Could not load the Excel library.', 'err'); return; }
+    const data = lastRows.map(s => ({ 'Rank in circle': ranked(s) ? s.circle_rank : '—', 'Rank in India': ranked(s) ? s.pan_rank : '—', 'Store code': s.code, 'Store name': s.name, 'Circle': s.circle, 'Points': Number(s.points || 0), 'Cycles done': `${s.cycles_done} of ${s.cycles_held}`, 'Short (all)': Number(s.short || 0), 'In transit': Number(s.short_transit || 0), 'Other status': Number(s.short_other || 0), 'Counted shortage %': rkCpct(s) == null ? '' : Number(rkCpct(s)) }));
+    const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Ranking');
+    const dd = new Date(), ymd = dd.getFullYear() + String(dd.getMonth() + 1).padStart(2, '0') + String(dd.getDate()).padStart(2, '0');
+    XLSX.writeFile(wb, `Ranking_${slug(S.cycleName)}_${ymd}.xlsx`);
+    toast(`Downloaded ${lastRows.length} store(s).`, 'ok');
+  }
+// ---- small inline icons for the top-store card (original design, unchanged) ----
 const rkSvg = (inner, fill) => `<svg viewBox="0 0 24 24" width="30" height="30" ${fill ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'} aria-hidden="true">${inner}</svg>`;
 const RK_ICON = {
   building: rkSvg('<path d="M5 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17"/><path d="M15 9h3a1 1 0 0 1 1 1v11"/><path d="M3 21h18"/><path d="M9 7h2M9 11h2M9 15h2"/>'),
@@ -36,64 +110,24 @@ const rkTopCard = (c, s) => `<div class="tcard">
   <div class="tc-pts"><span class="tc-trophy">${RK_ICON.trophy}</span><div><small>Earned Points</small><b>${rkPts(c.top_points)} pts</b></div></div>
   <div class="tc-ranks"><div class="tc-r blue"><span>${RK_ICON.bars}</span><div><small>India Rank</small><b>${s ? '#' + s.pan_rank : '—'}</b></div></div>
     <div class="tc-r amber"><span>${RK_ICON.crown}</span><div><small>Circle Rank</small><b>${s ? '#' + s.circle_rank : '#1'}</b></div></div></div></div>`;
-
-// ---- a table over already-loaded rows: click a heading to sort (A to Z / Z to A, low to high / high to low). No filters. ----
-// cols: [{ k, l, t: 'num' | 'text', w: column width in %, get: row => value, cell: row => html }]; S = { sort: null | { k, dir } } is kept between redraws.
-// Percentage widths + wrapping text: the table always fits the page width, so there is no sideways scrolling.
-function rkGrid(cols, rows, S, emptyMsg) {
-  let out = rows.slice();
-  if (S.sort) { const c = cols.find(x => x.k === S.sort.k), dir = S.sort.dir === 'desc' ? -1 : 1;
-    out = out.map((r, i) => [r, i]).sort((A, B) => { const x = c.get(A[0]), y = c.get(B[0]), nx = x == null || x === '', ny = y == null || y === '';
-      if (nx || ny) return nx && ny ? A[1] - B[1] : nx ? 1 : -1;                 // blanks always last
-      const d = c.t === 'num' ? Number(x) - Number(y) : String(x).localeCompare(String(y), undefined, { sensitivity: 'base', numeric: true });
-      return d * dir || A[1] - B[1]; }).map(p => p[0]); }
-  const arrow = c => !S.sort || S.sort.k !== c.k ? '⇅' : S.sort.dir === 'asc' ? '↑' : '↓';
-  const tip = c => c.t === 'num' ? 'Sort low to high, then high to low' : 'Sort A to Z, then Z to A';
-  return `<div class="tw rkw"><table class="tbl rkt"><colgroup>${cols.map(c => `<col style="width:${c.w}%">`).join('')}</colgroup>
-    <thead><tr>${cols.map(c => `<th><span class="srt ${S.sort && S.sort.k === c.k ? 'on' : ''}" data-sort="${c.k}" title="${tip(c)}">${esc(c.l)}<i>${arrow(c)}</i></span></th>`).join('')}</tr></thead>
-    <tbody>${out.map(r => `<tr>${cols.map(c => `<td>${c.cell(r)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` + (out.length ? '' : `<p class="muted" style="padding:6px 4px">${emptyMsg}</p>`);
-}
-const rkSortClick = (e, S, redraw) => { const h = e.target.closest('[data-sort]'); if (!h) return false; const k = h.dataset.sort;
-  S.sort = !S.sort || S.sort.k !== k ? { k, dir: 'asc' } : S.sort.dir === 'asc' ? { k, dir: 'desc' } : null; redraw(); return true; };
-
-async function rankStaff(el) {
-  const { data: d, error } = await sb.rpc('rank_staff'); if (error) throw error;
-  const admin = d.role === 'ADMIN', stores = d.stores || [], circles = d.circles || [];
-  const tabs = admin ? [['stores', 'Stores (India)'], ['circles', 'Circles'], ['top', 'Top store of each circle']] : [['stores', 'Stores'], ['circles', circles.length > 1 ? 'My circles' : 'My circle']];
-  const F = { tab: 'stores', q: '', c: '' }, ranked = s => s.cycles_done > 0, cs = [...new Set(stores.map(s => s.circle))].sort();
-  const SC = [
-    { k: 'circle_rank', w: 8, l: 'Rank in circle', t: 'num', get: s => s.circle_rank, cell: s => rkPill(s.circle_rank, ranked(s)) },
-    { k: 'pan_rank', w: 8, l: 'Rank in India', t: 'num', get: s => s.pan_rank, cell: s => rkPill(s.pan_rank, ranked(s)) },
-    { k: 'store', w: 19, l: 'Store', t: 'text', get: s => s.code + ' ' + s.name, cell: s => `<b>${esc(s.code)}</b><div class="muted" style="font-size:12px">${esc(s.name)}</div>` },
-    { k: 'circle', w: 7, l: 'Circle', t: 'text', get: s => s.circle, cell: s => esc(s.circle) },
-    { k: 'points', w: 8, l: 'Points', t: 'num', get: s => s.points, cell: s => `<b>${rkPts(s.points)}</b>` },
-    { k: 'cycles_done', w: 8, l: 'Cycles done', t: 'num', get: s => s.cycles_done, cell: s => `${s.cycles_done} of ${s.cycles_held}` },
-    { k: 'short', w: 9, l: 'Short (all)', t: 'num', get: s => s.short, cell: s => rkPts(s.short) },
-    { k: 'short_transit', w: 9, l: 'In transit', t: 'num', get: s => s.short_transit, cell: s => rkPts(s.short_transit) },
-    { k: 'short_other', w: 9, l: 'Other status', t: 'num', get: s => s.short_other, cell: s => rkPts(s.short_other) },
-    { k: 'counted_short_pct', w: 15, l: 'Counted shortage %', t: 'num', get: s => rkCpct(s), cell: s => rkPct(rkCpct(s)) }];
-  const CC = [
-    { k: 'circle_rank', w: 9, l: 'Circle rank', t: 'num', get: c => c.circle_rank, cell: c => rkPill(c.circle_rank, c.cycles_done > 0) },
-    { k: 'circle', w: 10, l: 'Circle', t: 'text', get: c => c.circle, cell: c => `<b>${esc(c.circle)}</b>` },
-    { k: 'stores', w: 7, l: 'Stores', t: 'num', get: c => c.stores, cell: c => c.stores },
-    { k: 'avg_points', w: 11, l: 'Avg points / store', t: 'num', get: c => c.avg_points, cell: c => `<b>${rkPts(c.avg_points)}</b>` },
-    { k: 'participation_pct', w: 11, l: 'Participation', t: 'num', get: c => c.participation_pct, cell: c => c.participation_pct == null ? '—' : c.participation_pct + '%' },
-    { k: 'short_transit', w: 12, l: 'Short in transit', t: 'num', get: c => c.short_transit, cell: c => rkPts(c.short_transit) },
-    { k: 'short_other', w: 12, l: 'Short other status', t: 'num', get: c => c.short_other, cell: c => rkPts(c.short_other) },
-    { k: 'counted_short_pct', w: 13, l: 'Counted shortage %', t: 'num', get: c => rkCpct(c), cell: c => rkPct(rkCpct(c)) },
-    { k: 'top_store', w: 15, l: 'Top store', t: 'text', get: c => c.top_store, cell: c => c.top_store ? esc(c.top_store) + ' <span class="muted">(' + rkPts(c.top_points) + ' pts)</span>' : '—' }];
-  const SS = { sort: null }, CS = { sort: null };       // sort + filters survive tab switches
-  el.innerHTML = `${stores.length && !('counted_short_pct' in stores[0]) ? rkStaleBanner : ''}<div class="tabs seg" id="rk-tabs" style="margin-bottom:12px">${tabs.map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''}" data-t="${t[0]}">${t[1]}</button>`).join('')}</div><div id="rk-body"></div>`;
+  el.innerHTML = `${stores.length && !('counted_short_pct' in stores[0]) ? rkStaleBanner : ''}<div class="tabs seg rk-tabs" id="rk-tabs" style="margin-bottom:12px">${tabs.map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''}" data-t="${t[0]}">${ic(t[2], 16)}<span>${t[1]}</span></button>`).join('')}</div><div id="rk-body"></div>`;
   const body = el.querySelector('#rk-body');
+  const pager = (total, pages) => {
+    if (!total) return '';
+    const from = (F.page - 1) * F.ps + 1, to = Math.min(total, F.page * F.ps);
+    const p0 = Math.max(1, Math.min(F.page - 2, pages - 4)), p1 = Math.min(pages, p0 + 4);
+    let btns = '';
+    for (let p = p0; p <= p1; p++) btns += `<button type="button" class="${p === F.page ? 'on' : ''}" data-pg="${p}">${p}</button>`;
+    return `<div class="rk-pager"><span class="muted">Showing ${from} &ndash; ${to} of ${total} stores</span><div class="rk-pg-right"><div class="pg"><button type="button" data-pg="${F.page - 1}" ${F.page <= 1 ? 'disabled' : ''}>&lsaquo;</button>${btns}<button type="button" data-pg="${F.page + 1}" ${F.page >= pages ? 'disabled' : ''}>&rsaquo;</button></div><label class="rk-ps"><select id="rk-ps">${[10, 25, 50].map(n => `<option value="${n}" ${n === F.ps ? 'selected' : ''}>${n}</option>`).join('')}</select> / page</label></div></div>`;
+  };
   const draw = () => {
     el.querySelectorAll('#rk-tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.t === F.tab));
     if (F.tab === 'circles') {
       body.innerHTML = `<div class="card" style="padding:16px">${circles.length ? rkGrid(CC, circles, CS, 'No circles.') : '<p class="muted">No circles.</p>'}</div>${rkHow()}`;
       body.onclick = e => rkSortClick(e, CS, draw);
     } else if (F.tab === 'top') {
-      // the card of the store with the best all-India rank comes first (ties: circle name A to Z)
       const top = circles.filter(c => c.top_store).map(c => ({ c, s: stores.find(x => x.code === c.top_store) }))
-        .sort((a, b) => (a.s ? a.s.pan_rank : 1e9) - (b.s ? b.s.pan_rank : 1e9) || (a.s ? a.s.circle_rank : 0) - (b.s ? b.s.circle_rank : 0) || a.c.circle.localeCompare(b.c.circle));
+        .sort((a, b) => (a.s ? a.s.pan_rank : 1e9) - (b.s ? b.s.pan_rank : 1e9) || a.c.circle.localeCompare(b.c.circle));
       body.onclick = null;
       body.innerHTML = top.length ? `<div class="rk-top">${top.map(x => rkTopCard(x.c, x.s)).join('')}</div>${rkHow()}`
         : '<div class="card startcard"><h2>No top stores yet</h2><p class="muted">Stores appear here once they complete an audit.</p></div>';
@@ -101,15 +135,35 @@ async function rankStaff(el) {
       const q = F.q.trim().toLowerCase();
       let rows = stores.filter(s => (!F.c || s.circle === F.c) && (!q || (s.code + ' ' + s.name).toLowerCase().includes(q)));
       if (!admin) rows = rows.slice().sort((a, b) => a.circle.localeCompare(b.circle) || a.circle_rank - b.circle_rank || a.code.localeCompare(b.code));
-      body.innerHTML = `<div class="filters"><div><label>Circle</label><select id="rk-c"><option value="">All circles</option>${cs.map(c => `<option ${c === F.c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
-        <div style="flex:1;min-width:180px"><label>Search store</label><input id="rk-q" placeholder="Store code or name" value="${esc(F.q)}"></div></div>
-        <div class="card" style="padding:16px">${rkGrid(SC, rows, SS, 'No stores match.')}</div>${rkHow()}`;
-      body.onclick = e => rkSortClick(e, SS, draw);
+      rows = rkSorted(SC, rows, SS);
+      lastRows = rows;
+      const pages = Math.max(1, Math.ceil(rows.length / F.ps));
+      if (F.page > pages) F.page = pages;
+      const pageRows = rows.slice((F.page - 1) * F.ps, F.page * F.ps);
+      body.innerHTML = `<div class="rk-frow"><div class="rk-fc"><label>Circle</label><select id="rk-c"><option value="">All circles</option>${cs.map(c => `<option ${c === F.c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+        <div class="rk-fs"><label>Search store</label><div class="rk-swrap">${ic('search', 15)}<input id="rk-q" placeholder="Search store code or name..." value="${esc(F.q)}"></div></div>
+        <div class="rk-fe"><label>&nbsp;</label><div class="rk-dd"><button type="button" class="btn" id="rk-exp">${ic('dl', 15)} Export</button><div class="rk-dmenu" id="rk-expmenu" hidden><button type="button" id="rk-expx">Excel (.xlsx)</button></div></div></div></div>
+        ${podium}<div class="card" id="rk-table" style="padding:16px">${rkGrid(SC, pageRows, SS, 'No stores match.')}</div>${pager(rows.length, pages)}${rkHow()}`;
+      body.onclick = e => {
+        const t = e.target;
+        const pg = t.closest('[data-pg]');
+        if (pg) { if (!pg.disabled) { F.page = +pg.dataset.pg; draw(); } return; }
+        if (t.closest('#rk-expx')) { body.querySelector('#rk-expmenu').hidden = true; exportRanking(); return; }
+        if (t.closest('#rk-exp')) { const m = body.querySelector('#rk-expmenu'); m.hidden = !m.hidden; return; }
+        const dot = t.closest('[data-dot]');
+        if (dot) { const m = dot.parentElement.querySelector('.rk-dmenu'), was = m.hidden; body.querySelectorAll('.rk-dmenu').forEach(x => x.hidden = true); m.hidden = !was; return; }
+        body.querySelectorAll('.rk-dmenu').forEach(x => x.hidden = true);
+        rkSortClick(e, SS, draw);
+      };
       const c = body.querySelector('#rk-c'), qi = body.querySelector('#rk-q');
-      c.onchange = e => { F.c = e.target.value; draw(); };
-      qi.oninput = e => { F.q = e.target.value; const p = e.target.selectionStart; draw(); const n = body.querySelector('#rk-q'); n.focus(); n.setSelectionRange(p, p); };
+      c.onchange = e => { F.c = e.target.value; F.page = 1; draw(); };
+      qi.oninput = e => { F.q = e.target.value; F.page = 1; const p = e.target.selectionStart; draw(); const n = body.querySelector('#rk-q'); n.focus(); n.setSelectionRange(p, p); };
+      const psSel = body.querySelector('#rk-ps');
+      if (psSel) psSel.onchange = e => { F.ps = +e.target.value; F.page = 1; draw(); };
+      const vf = body.querySelector('#rk-full');
+      if (vf) vf.onclick = () => { const tb = body.querySelector('#rk-table'); if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
     }
   };
-  el.querySelector('#rk-tabs').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { F.tab = b.dataset.t; draw(); } };
+  el.querySelector('#rk-tabs').onclick = e => { const b = e.target.closest('[data-t]'); if (b) { F.tab = b.dataset.t; F.page = 1; draw(); } };
   draw();
 }

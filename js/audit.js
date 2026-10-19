@@ -397,7 +397,7 @@ async function resultView(el, sid, embedded) {
   }
   const mark = () => { el.querySelectorAll('#rtabs [data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab)); drawSub(); CF.chips(el.querySelector('#rchips')); };
   async function load() {
-    mark(); const rt = el.querySelector('#rt'); rt.innerHTML = '<div class="boot">Loading…</div>';
+    mark(); const rt = el.querySelector('#rt'); rt.innerHTML = universeLoader();
     let qb = sb.from('reconciliation_results').select('item_code,inventory_status,item_description,item_uom,expected_qty,physical_qty,item_quality,item_sno,result,is_unlisted', { count: 'exact' }).eq('session_id', sid);
     if (tab === 'SERIAL') qb = qb.eq('is_serialized', true); else if (tab === 'NONSERIAL') qb = qb.eq('is_serialized', false); else if (tab !== 'ALL') qb = qb.eq('result', tab);
     if (split() && sub !== 'ALL') qb = qb.eq('result', sub);

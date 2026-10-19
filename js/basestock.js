@@ -102,7 +102,7 @@ if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
   // ----- step 3 -> 4: parse, validate, store-name check -----
   $('file').onchange = async e => {
     const f = e.target.files[0]; if (!f) return; st.file = f; st.res = null; const store = sById(st.store);
-    $('s4').innerHTML = '<div class="boot">Reading file…</div>';
+    $('s4').innerHTML = universeLoader();
     try {
       if (!/\.(xlsx|xls)$/i.test(f.name)) throw new Error('Please upload an .xlsx or .xls file.');
       await loadXlsx();

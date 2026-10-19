@@ -134,7 +134,7 @@ PAGES.reports = async el => {
     const needMsg = R.need === 'store' && !st.store ? 'Select a store above to preview the Store Audit Report.'
       : R.need === 'circle' && !st.circle ? 'Select a circle above to preview the Circle Shortage Report.' : '';
     if (needMsg) { $('prev').innerHTML = `<div class="alert info">${needMsg}</div>`; return; }
-    $('prev').innerHTML = '<div class="boot">Loading preview…</div>';
+    $('prev').innerHTML = universeLoader();
     const { data, error } = await sb.rpc('report_rows', args(st.page * PS, PS, false)); if (error) { $('prev').innerHTML = `<div class="alert err">${esc(rpcMsg(error))}</div>`; return; }
     $('prev').innerHTML = `<div class="bar"><b>Preview: ${R.title}</b><span class="muted">${fn(data.total)} row(s)${R.variance ? (st.inc ? ' · full reconciliation' : ' · exceptions only') : ''}</span></div>` + tbl(R.head, data.rows.map(r => '<tr>' + R.head.map(h => `<td>${r[h] == null ? '' : esc(r[h])}</td>`).join('') + '</tr>').join(''))
       + `<div class="bar"><span class="muted">Showing ${data.rows.length ? st.page * PS + 1 : 0}–${st.page * PS + data.rows.length}</span><div class="row"><button class="btn sm" data-pg="-1" ${st.page ? '' : 'disabled'}>Previous</button><button class="btn sm" data-pg="1" ${(st.page + 1) * PS < data.total ? '' : 'disabled'}>Next</button></div></div>`;
@@ -161,7 +161,7 @@ async function logsView(el, presetStore) {
   const $ = id => el.querySelector('#' + id);
   const meta = m => Object.entries(m || {}).slice(0, 4).map(([k, v]) => `${esc(k)}: ${esc(typeof v === 'object' ? JSON.stringify(v) : v)}`).join(' · ');
   async function load() {
-    $('lg').innerHTML = '<div class="boot">Loading…</div>';
+    $('lg').innerHTML = universeLoader();
     const { data, error } = await sb.rpc('audit_log', { p_from: F.from || null, p_to: F.to || null, p_type: F.type || null, p_store: F.store || null, p_cycle: F.cycle || null, p_q: F.q || null, p_offset: page * PS, p_limit: PS });
     if (error) { $('lg').innerHTML = `<div class="alert err">${esc(rpcMsg(error))}</div>`; return; }
     $('lg').innerHTML = tbl(['Date & Time', 'User', 'Activity', 'Store', 'Cycle', 'Details'], data.rows.map(r => `<tr><td class="nw">${fdt(r.created_at)}</td><td><b>${esc(r.user_name || '—')}</b><br><span class="muted">${esc((r.role || '').replace('_', ' '))}</span></td>

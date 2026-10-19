@@ -151,7 +151,7 @@ function storeTop() {
 }
 function shell(page) {
   const staff = isStaff(), cur = resolvePage(page, staff); S.cur = cur;
-  return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg"><div class="boot">Loading…</div></div></main></div></div>`;
+  return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg">${universeLoader()}</div></main></div></div>`;
 }
 async function fillTop() {
   try {
@@ -182,7 +182,7 @@ function updateShell(cur) {
   const t = document.querySelector('.tb-t'); if (t && isStaff()) { const [h, s] = HEAD[cur] || ['', '']; t.innerHTML = h ? `<h1>${h}</h1><p>${s}</p>` : ''; }
   const p2 = document.querySelector('.page2'); if (p2) { p2.classList.remove('fixed'); p2.scrollTop = 0; }
   if (isStaff() && typeof refreshProgress === 'function') refreshProgress();     // keep the sidebar progress bar current
-  const old = document.getElementById('pg'), pg = document.createElement('div'); pg.id = 'pg'; pg.className = 'fade'; pg.innerHTML = '<div class="boot">Loading…</div>'; old.replaceWith(pg);   // fresh element: no stale handlers
+  const old = document.getElementById('pg'), pg = document.createElement('div'); pg.id = 'pg'; pg.className = 'fade'; pg.innerHTML = universeLoader(); old.replaceWith(pg);   // fresh element: no stale handlers
   if (PAGES[cur]) PAGES[cur](pg).catch(e => { console.error(e); pg.innerHTML = '<div class="alert err">Could not load this page. ' + esc(friendlyError(e)) + '</div>'; });
 }
 function wireShell() {

@@ -1,0 +1,36 @@
+/* =====================================================================
+   Universe / orbit global loading screen.
+   Rendered by universeLoader() in js/ui.js. It replaces ONLY the page
+   content while data loads - the sidebar and top bar stay visible.
+   The same component is used on every page (Dashboard, Base Data,
+   Start Audit, My Result, Ranking, My Profile, ...): universal wording,
+   no page-specific text.
+   ===================================================================== */
+.uload{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:min(58vh,540px);padding:36px 16px;text-align:center}
+.ustage{position:relative;width:min(340px,84vw);aspect-ratio:340/240}
+.ustage svg.ur{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.uring{fill:none;stroke:#0B3D2E;stroke-opacity:.13;stroke-width:1.5}
+/* travelling particles (SVG animateMotion carries them along the rings) */
+.upt{fill:#16A34A}
+/* centre: Shadowfax paper-plane in a glass badge with a soft green glow. Stable - no animation. */
+.ucore{position:absolute;left:50%;top:50%;width:78px;height:78px;margin:-39px 0 0 -39px;border-radius:50%;
+  background:rgba(255,255,255,.9);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  border:1px solid rgba(11,61,46,.12);
+  box-shadow:0 0 46px rgba(22,163,74,.30),0 12px 26px rgba(11,61,46,.10);
+  display:flex;align-items:center;justify-content:center}
+/* module icons floating around the orbit */
+.uic{position:absolute;left:var(--x);top:var(--y);width:36px;height:36px;margin:-18px 0 0 -18px;border-radius:50%;
+  background:#fff;border:1px solid rgba(11,61,46,.10);box-shadow:0 6px 16px rgba(11,61,46,.10);
+  display:flex;align-items:center;justify-content:center;color:#0B3D2E;
+  animation:ufloat 5.2s ease-in-out infinite;animation-delay:var(--d,0s)}
+.uic .ic{display:block}
+/* progress bar */
+.ubar{width:min(280px,62%);height:8px;border-radius:99px;background:#E3E9E6;overflow:hidden;margin-top:24px}
+.ubar i{display:block;height:100%;width:38%;border-radius:99px;
+  background:linear-gradient(90deg,#1B834C,#35C37B);
+  animation:uslide 1.5s ease-in-out infinite}
+.utxt{margin:14px 0 0;font-size:15px;font-weight:500;color:#44564F;letter-spacing:.2px}
+@keyframes ufloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes uslide{0%{transform:translateX(-115%)}100%{transform:translateX(295%)}}
+@media (prefers-reduced-motion:reduce){.uic,.ubar i{animation:none}}
