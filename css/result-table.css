@@ -2,6 +2,7 @@
 .resfit{display:block}
 .resfit .rhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap}
 .rhead .rh1{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.rhead h1{margin:0;font-size:22px}.rhead .rmeta{color:#6B7B75;font-size:13.5px}
+.rhead .rhact{display:flex;align-items:center;gap:10px}
 
 /* summary card: top row (donut | Expected / Found / Short / Excess), then one full-width pill row */
 .rsum2{display:block;padding:16px 24px;margin-bottom:16px}

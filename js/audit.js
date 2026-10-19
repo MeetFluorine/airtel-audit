@@ -303,6 +303,44 @@ PAGES.result = async el => {
   if (!sid) { el.innerHTML = '<div class="card startcard"><h2>No audit selected</h2><p class="muted">Open a result from Store Audit.</p></div>'; return; }
   return resultView(el, sid, false);
 };
+/* Store result page: download this session's variance (shortage + excess SN rows) as .xlsx.
+   Columns: Type | Inv. Status | Item Code | Quality | Quantity | SN. Paged through in chunks. */
+async function downloadVariance(sid, storeCode, cycleName, btn) {
+  const PSZ = 1000; let off = 0, all = [];
+  await loadXlsx();
+  const label = btn ? btn.innerHTML : '';
+  const slug = s => String(s || '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  try {
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Fetching…'; }
+    for (;;) {
+      const { data, error } = await sb.from('reconciliation_results')
+        .select('result,inventory_status,item_code,item_quality,short_qty,excess_qty,item_sno')
+        .eq('session_id', sid).in('result', ['SHORT', 'EXCESS'])
+        .order('result', { ascending: false }).order('item_code').order('item_sno')
+        .range(off, off + PSZ - 1);
+      if (error) throw error;
+      all = all.concat(data); off += PSZ;
+      if (btn) btn.innerHTML = `Fetching ${fn(all.length)}…`;
+      if (data.length < PSZ) break;
+    }
+  } finally { if (btn) { btn.disabled = false; btn.innerHTML = label; } }
+  if (!all.length) { toast('No shortage or excess rows in this audit.', 'err'); return; }
+  const rows = all.map(r => ({
+    'Type': r.result === 'SHORT' ? 'Short' : 'Excess',
+    'Inv. Status': r.inventory_status || '—',
+    'Item Code': r.item_code,
+    'Quality': r.item_quality || '—',
+    'Quantity': r.result === 'SHORT' ? Number(r.short_qty) : Number(r.excess_qty),
+    'SN': r.item_sno || '—'
+  }));
+  const head = ['Type', 'Inv. Status', 'Item Code', 'Quality', 'Quantity', 'SN'];
+  const ws = XLSX.utils.json_to_sheet(rows, { header: head });
+  ws['!cols'] = head.map(h => ({ wch: Math.min(42, Math.max(h.length + 2, ...rows.slice(0, 500).map(r => String(r[h]).length + 2))) }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Variance Report');
+  const d = new Date(), ymd = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  XLSX.writeFile(wb, `Variance_Report_${slug(storeCode)}_${slug(cycleName)}_${ymd}.xlsx`);
+  toast(`Downloaded ${fn(rows.length)} row(s).`, 'ok');
+}
 async function resultView(el, sid, embedded) {
   const staff = isStaff();
   const cnt = async ser => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser)).count) || 0;
@@ -330,7 +368,7 @@ async function resultView(el, sid, embedded) {
     vb.ser_excess ? pill('n', 'barcode', `Serialized excess <b>${fn(vb.ser_excess)}</b>`) : '', vb.non_excess ? pill('n', 'box', `Non-serialized excess <b>${fn(vb.non_excess)}</b>`) : ''].join('');
   el.innerHTML = `<div class="resfit">
     <div class="rhead"><div class="rh1">${staff ? `<a class="btn sm" href="#/storeaudit">${ic('back', 15)} Back</a>` : ''}<h1>Audit Result - ${esc(ss.stores?.code || '')}</h1>${badge(ss.status === 'LOCKED' ? 'Completed' : 'Superseded version', ss.status === 'LOCKED' ? 'ok' : 'warn')}
-      <span class="rmeta">${esc(ss.audit_cycles?.name || '')} · Version ${ss.version} · Submitted ${fdt(ss.submitted_at)}</span></div><span class="live">${ic('lock', 14)} Locked</span></div>
+      <span class="rmeta">${esc(ss.audit_cycles?.name || '')} · Version ${ss.version} · Submitted ${fdt(ss.submitted_at)}</span></div><span class="rhact"><button type="button" class="btn sm yel" id="vdl" title="Download the shortage + excess SN rows for this audit cycle as Excel">${ic('dl', 15)} Variance report</button><span class="live">${ic('lock', 14)} Locked</span></span></div>
     <div class="card rsum2"><div class="rtop"><div class="rdon">${donut([{ v: matched, color: '#16A34A' }, { v: shortU, color: '#E5484D' }, { v: excessU, color: '#F5B301' }], rate == null ? '—' : rate.toFixed(1) + '%', 'Match Rate', 130, 12)}</div>
       <div class="rstats">${stat('', 'box', 'Expected', fn(m.expected))}${stat('g', 'check', 'Found', fn(m.physical))}${stat('r', 'alert', 'Short', fn(shortU), shSub)}${stat('y', 'trend', 'Excess', fn(excessU))}</div></div>
       <div class="rpills">${pills}</div></div>
@@ -393,6 +431,7 @@ async function resultView(el, sid, embedded) {
     if (val) rmk[rkey(r)] = val; else delete rmk[rkey(r)]; st.textContent = val ? 'Saved ✓' : 'Removed'; st.className = 'rmks ok'; setTimeout(() => { st.textContent = ''; }, 2500);
   };
   el.querySelector('#q').oninput = e => { clearTimeout(timer); const v = e.target.value; timer = setTimeout(() => { q = v; page = 0; load(); }, 300); };
+  el.querySelector('#vdl').onclick = e => downloadVariance(sid, (ss.stores && ss.stores.code) || 'store', (ss.audit_cycles && ss.audit_cycles.name) || 'cycle', e.currentTarget).catch(err => toast(friendlyError(err), 'err'));
   await load();
 }
 
