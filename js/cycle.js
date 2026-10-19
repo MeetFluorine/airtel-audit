@@ -49,7 +49,7 @@ async function purgeCycleFiles(cycleId) {   // original Excel backups of the cyc
 function wireCycle() {
   const $ = id => document.getElementById(id);
   if ($('cyc-load')) $('cyc-load').onclick = () => { applyCycle($('cyc-sel').value); S.shellUser = null; route(); };
-  if ($('cyc-new')) $('cyc-new').onclick = () => openModal('Create new audit cycle', `<p class="muted">Every store takes part. The new cycle becomes the current cycle for all store users, and the previous cycle is closed (its data stays until you delete it).</p>
+  if ($('cyc-new')) $('cyc-new').onclick = () => openModal('Create new audit cycle', `<p class="muted">Every store takes part. The new cycle becomes the current cycle for all store users. An older cycle stays open until its deadline passes or you close it yourself (its data stays until you delete it).</p>
       <p class="muted">Stores get <b>3 days</b> from creation to complete their audits — the deadline is set automatically.</p>
       <label>Cycle name</label><input id="m_cname" placeholder="e.g. OCT-2026" autocomplete="off">`, [cancelBtn,
       { label: 'Create cycle', cls: 'primary', fn: async () => { const n = document.getElementById('m_cname').value.trim(); if (n.length < 2) { toast('Please enter a cycle name.', 'err'); return false; }
