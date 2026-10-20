@@ -171,8 +171,8 @@ if (typeof PAGES !== 'undefined') PAGES.basestock = async el => {
       }
       say('Saving original file…');
       const path = `${c}/${store.id}/${uid}.${f.name.split('.').pop().toLowerCase()}`;
-      const up = await sb.storage.from('base-stock-files').upload(path, f, { upsert: true });
-      if (up.error) toast('Rows saved, but the original file backup failed.', 'err');
+      const up = await sb.storage.from('base-stock-files').upload(path, f);
+      if (up.error) { console.error('base file backup failed', up.error); toast('Rows saved, but the original file backup failed: ' + (up.error.message || 'unknown error'), 'err'); }
       await sb.from('base_stock_uploads').update({ source_file_path: up.error ? null : path, rows_uploaded: r.total, rows_valid: r.valid.length, serialized_count: r.ser, non_serialized_count: r.non,
         error_summary: { errors: r.errors.length, duplicate_serials: r.dupSerial, blank_codes: r.blankCode, invalid_qty: r.badQty } }).eq('id', uid);
       await sb.rpc('log_upload_event', { p_type: 'BASE_UPLOADED', p_store: store.id, p_cycle: c, p_upload: uid, p_meta: { file: f.name, rows: r.total, valid: r.valid.length, errors: r.errors.length } });
