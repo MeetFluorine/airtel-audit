@@ -82,8 +82,8 @@ PAGES.basedata = async el => {
       }
       say('Saving original file…');
       const path = `${c}/${storeId}/${uid}.${f.name.split('.').pop().toLowerCase()}`;
-      const up = await sb.storage.from('base-stock-files').upload(path, f, { upsert: true });
-      if (up.error) toast('Rows saved, but the original file backup failed.', 'err');
+      const up = await sb.storage.from('base-stock-files').upload(path, f);
+      if (up.error) { console.error('base file backup failed', up.error); toast('Rows saved, but the original file backup failed: ' + (up.error.message || 'unknown error'), 'err'); }
       say('Saving…');
       const fin = await sb.rpc('store_base_finish', { p_upload: uid, p_path: up.error ? '' : path, p_rows_uploaded: r.total,
         p_errors: { errors: r.errors.length, duplicate_serials: r.dupSerial, blank_codes: r.blankCode, invalid_qty: r.badQty } }); if (fin.error) throw fin.error;
