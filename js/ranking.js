@@ -119,12 +119,20 @@ async function rankStaff(el) {
   const F = { tab: 'stores', q: '', c: '', page: 1, ps: 10 }, ranked = s => s.cycles_done > 0;
   // Pan-India Top 3 (admin only): wide cards with level chips + season stats (design module, Oct 2026)
   const crown = r => `<svg class="crown c${r}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.8 7.2 7.2 10.8l4.8-6 4.8 6 4.4-3.6-2 10.8H4.8z"/><rect x="4.8" y="19" width="14.4" height="2" rx="1"/></svg>`;
+  // Top-3 stat icons (metrics are icon + value only, no text labels - owner design)
+  const ti = (inner) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+  const TI = { flag: ti('<path d="M5 21V4"/><path d="M5 4h12.5l-2.5 4 2.5 4H5"/>'),
+    users: ti('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 15.2c2.3.2 3.9 1.6 4.4 4.3"/>'),
+    cal: ti('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15.5l2 2 4-4"/>'),
+    bars: ti('<path d="M4 20V12M10 20V5M16 20v-8M21 20H3"/>'),
+    warn: ti('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8v.2"/>'),
+    truck: ti('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>') };
   const topCard3 = (s, r) => `<div class="rpc3 w${r}">${crown(r)}<div class="rpc3-main"><span class="rkmedal m${r}">${r}</span>
     <div class="rpc3-store"><b>${esc(s.code)}</b><span>${esc(s.name)} (${esc(s.circle)})</span><span>${rkLvlChip(s.level)}</span></div>
     <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>
-    <div class="rpc3-stats"><div><span>India Rank</span><b>#${s.pan_rank}</b></div><div><span>Circle Rank</span><b>#${s.circle_rank}</b></div><div><span>Cycles</span><b>${s.cycles_done}/${s.cycles_held}</b></div><div><span>Match Rate</span><b>${rkPct2(s.match_rate)}</b></div><div><span>Genuine Shortage</span><b>${rkPct(rkCpct(s))}</b></div></div>
-    <div class="rpc3-qty"><span>In Transit <b>${rkPts(s.short_transit)}</b> (not counted)</span><span>Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
-  const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b><span>Based on total points this season</span></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
+    <div class="rpc3-stats"><div title="India rank">${TI.flag}<b>#${s.pan_rank}</b></div><div title="Circle rank">${TI.users}<b>#${s.circle_rank}</b></div><div title="Cycles completed">${TI.cal}<b>${s.cycles_done}/${s.cycles_held}</b></div><div title="Match rate">${TI.bars}<b>${rkPct2(s.match_rate)}</b></div><div title="Genuine shortage %">${TI.warn}<b>${rkPct(rkCpct(s))}</b></div></div>
+    <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b> <small>(not counted)</small></span><span class="q-sep">|</span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
+  const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
   const SC = [
     { k: 'pan_rank', w: 6, l: '# (India)', t: 'num', get: s => s.pan_rank, cell: s => ranked(s) ? `<b>${s.pan_rank}</b>` : '—' },
     { k: 'circle_rank', w: 6, l: '# (Circle)', t: 'num', get: s => s.circle_rank, cell: s => ranked(s) ? `<b${s.circle_rank <= 3 ? ' class="rk-red"' : ''}>${s.circle_rank}</b>` : '—' },
@@ -174,7 +182,7 @@ const rkTopCard = (c, s) => `<div class="tcard">
   <div class="tc-pts"><span class="tc-trophy">${RK_ICON.trophy}</span><div><small>Earned Points</small><b>${rkPts(c.top_points)} pts</b></div></div>
   <div class="tc-ranks"><div class="tc-r blue"><span>${RK_ICON.bars}</span><div><small>India Rank</small><b>${s ? '#' + s.pan_rank : '—'}</b></div></div>
     <div class="tc-r amber"><span>${RK_ICON.crown}</span><div><small>Circle Rank</small><b>${s ? '#' + s.circle_rank : '#1'}</b></div></div></div></div>`;
-  el.innerHTML = `${stores.length && !('level' in stores[0]) ? rkStaleBanner : ''}<div class="pagehead rk-phead"><div><h1>Ranking</h1><p class="muted" id="rk-sub" style="margin:4px 0 0"></p></div>
+  el.innerHTML = `${stores.length && !('level' in stores[0]) ? rkStaleBanner : ''}<div class="pagehead rk-phead"><div><h1>Ranking</h1></div>
     <div class="rk-sctrl"><label for="rk-season">Season</label><select id="rk-season">${seasons.map((s, i) => `<option value="${i}" ${i === si ? 'selected' : ''}>${s.label}</option>`).join('')}</select><span id="rk-live"></span></div></div>
     <div class="tabs seg rk-tabs" id="rk-tabs" style="margin-bottom:12px">${tabs.map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''}" data-t="${t[0]}">${ic(t[2], 16)}<span>${t[1]}</span></button>`).join('')}</div><div id="rk-body"></div>`;
   const body = el.querySelector('#rk-body');
@@ -189,8 +197,7 @@ const rkTopCard = (c, s) => `<div class="tcard">
   };
   const draw = () => {
     el.querySelectorAll('#rk-tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.t === F.tab));
-    const sub = el.querySelector('#rk-sub'), lv = el.querySelector('#rk-live');
-    if (sub) sub.textContent = seasons[si].live ? 'Store and circle ranking for the current season' : `Final store and circle ranking · ${seasons[si].label}`;
+    const lv = el.querySelector('#rk-live');
     if (lv) lv.innerHTML = seasons[si].live ? '<span class="livepill"><i></i>Live Season</span>' : '<span class="rk-ended">Season ended</span>';
     if (F.tab === 'circles') {
       body.innerHTML = `<div class="card" style="padding:16px">${circles.length ? rkGrid(CC, circles, CS, 'No circles.') : '<p class="muted">No circles.</p>'}</div>${rkHow()}`;
@@ -211,21 +218,21 @@ const rkTopCard = (c, s) => `<div class="tcard">
       const nT = stores.length, nC = stores.filter(s => s.cycles_held > 0 && s.cycles_done >= s.cycles_held).length,
         nP = stores.filter(s => s.cycles_done > 0 && s.cycles_done < s.cycles_held).length, nN = stores.filter(s => !s.cycles_done).length;
       const pctOf = n => nT ? (Math.round(1000 * n / nT) / 10) + '%' : '—';
-      const stat = (cls, icon, val, label, foot, barPct) => `<div class="card rk-stat"><span class="rk-ric ${cls}">${icon}</span><div class="rk-sm"><div class="rk-sv">${val}</div><small>${label}</small>${foot ? `<div class="rk-ss">${foot}</div>` : ''}${barPct != null ? `<div class="bar2 rk-sbar ${cls}"><i style="width:${barPct}%"></i></div>` : ''}</div></div>`;
-      const stats = `<div class="rk-stats">${stat('b', ic('store', 19), nT.toLocaleString('en-IN'), 'Total Stores', '', null)}
-        ${stat('g', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" opacity=".18"/><path d="M8.5 12.5l2.4 2.4L15.7 9.6"/></svg>', pctOf(nC), 'Completed', `${nC.toLocaleString('en-IN')} / ${nT.toLocaleString('en-IN')} stores`, nT ? 100 * nC / nT : 0)}
-        ${stat('a', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>', pctOf(nP), 'In Progress', `${nP.toLocaleString('en-IN')} / ${nT.toLocaleString('en-IN')} stores`, nT ? 100 * nP / nT : 0)}
-        ${stat('gr', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>', pctOf(nN), 'Not Started', `${nN.toLocaleString('en-IN')} / ${nT.toLocaleString('en-IN')} stores`, nT ? 100 * nN / nT : 0)}</div>`;
+      const stat = (cls, icon, val, label, barPct) => `<div class="card rk-stat"><span class="rk-ric ${cls}">${icon}</span><div class="rk-sm"><div class="rk-sv">${val}</div><small>${label}</small>${barPct != null ? `<div class="bar2 rk-sbar ${cls}"><i style="width:${barPct}%"></i></div>` : ''}</div></div>`;
+      const stats = `<div class="rk-stats">${stat('b', ic('store', 19), nT.toLocaleString('en-IN'), 'Total Stores', null)}
+        ${stat('g', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" opacity=".18"/><path d="M8.5 12.5l2.4 2.4L15.7 9.6"/></svg>', pctOf(nC), 'Completed', nT ? 100 * nC / nT : 0)}
+        ${stat('a', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>', pctOf(nP), 'In Progress', nT ? 100 * nP / nT : 0)}
+        ${stat('gr', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>', pctOf(nN), 'Not Started', nT ? 100 * nN / nT : 0)}</div>`;
       // With the Top 3 shown above and no filter/search/sort active, the table starts at rank 4 (design module).
       const excl = admin && top3.length > 0 && !F.c && !q && !SS.sort;
       const tRows = excl ? rows.filter(s => !top3.some(t => t.id === s.id)) : rows;
       const pages = Math.max(1, Math.ceil(tRows.length / F.ps));
       if (F.page > pages) F.page = pages;
       const pageRows = tRows.slice((F.page - 1) * F.ps, F.page * F.ps);
-      body.innerHTML = `${stats}<div class="rk-frow"><div class="rk-fc"><label>Circle</label><select id="rk-c"><option value="">All circles</option>${cs.map(c => `<option ${c === F.c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+      body.innerHTML = `<div class="rk-frow"><div class="rk-fc"><label>Circle</label><select id="rk-c"><option value="">All circles</option>${cs.map(c => `<option ${c === F.c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
         <div class="rk-fs"><label>Search store</label><div class="rk-swrap">${ic('search', 15)}<input id="rk-q" placeholder="Search store code or name..." value="${esc(F.q)}"></div></div>
         <div class="rk-fe"><label>&nbsp;</label><div class="rk-dd"><button type="button" class="btn" id="rk-exp">${ic('dl', 15)} Export</button><div class="rk-dmenu" id="rk-expmenu" hidden><button type="button" id="rk-expx">Excel (.xlsx)</button></div></div></div></div>
-        ${podium()}<div class="rk-tt"><b>${excl ? 'All Stores (Starting from Rank 4)' : 'All Stores'}</b>${excl ? '<span class="muted">Top 3 stores are shown above</span>' : ''}</div><div class="card" id="rk-table" style="padding:16px">${rkGrid(SC, pageRows, SS, 'No stores match.')}</div>${pager(tRows.length, pages)}${rkHow()}`;
+        ${stats}${podium()}<div class="rk-tt"><b>All Stores</b>${excl ? '<span class="muted">Top 3 shown above</span>' : ''}</div><div class="card" id="rk-table" style="padding:14px">${rkGrid(SC, pageRows, SS, 'No stores match.')}</div>${pager(tRows.length, pages)}${rkHow()}`;
       body.onclick = e => {
         const t = e.target;
         const pg = t.closest('[data-pg]');

@@ -185,3 +185,22 @@
 @media (min-width:901px){ .app.no-top .tb{display:none} }
 .rpc3-qty{display:flex;gap:18px;flex-wrap:wrap;border-top:1px solid #EEF3F0;margin-top:10px;padding-top:9px;font-size:12px;color:#5B6B62}
 .rpc3-qty b{color:#123;font-size:12.5px}
+
+/* ---- Leaderboard polish (owner redesign spec) ---- */
+.rk-stats{gap:10px;margin-bottom:10px}
+.rk-stat{padding:11px 14px;align-items:center}
+.rk-sv{font-size:20px}
+.rkpod3{margin:2px 0 12px}
+.rp3-row{gap:10px}
+.rpc3{padding:13px 15px}
+.rpc3.w2{border-color:#C9D4DB}
+.rpc3.w3{border-color:#E7C39A}
+.rpc3-stats{grid-template-columns:repeat(5,1fr);gap:4px}
+.rpc3-stats>div{display:flex;flex-direction:column;align-items:center;gap:3px;color:#84958A}
+.rpc3-stats b{font-size:13.5px;color:#123}
+.rpc3-qty{align-items:center;gap:12px}
+.rpc3-qty>span{display:inline-flex;align-items:center;gap:6px}
+.rpc3-qty .q-tr svg{color:#2563EB}
+.rpc3-qty .q-wn svg{color:#D97706}
+.rpc3-qty small{font-size:10.5px;color:#84958A;font-weight:600}
+.rpc3-qty .q-sep{color:#C3CFC9}
