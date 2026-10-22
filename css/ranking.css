@@ -311,3 +311,9 @@
 .rkw .rkt th{padding:8px 6px}
 .rkw .rkt td{padding:7px 8px}
 .rk-pg-right{gap:18px}
+
+/* ---- Top 3 crown vs points clearance + rows-per-page dropdown ---- */
+.rpc3 .crown{top:8px;right:10px;width:20px;height:20px}
+.rpc3-pts{padding-right:26px}
+.rk-ps select{appearance:none;-webkit-appearance:none;border:1.5px solid #C9D4CE;border-radius:8px;background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%235B6B62' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>") no-repeat right 9px center;padding:6px 27px 6px 10px;font-weight:700;color:#123;cursor:pointer}
+.rk-ps select:focus{outline:none;border-color:#0B3D2E;box-shadow:0 0 0 3px #F5B30133}
