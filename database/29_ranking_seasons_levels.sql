@@ -82,7 +82,7 @@ language sql stable security definer set search_path = '' as $$
      where s.active
   )
   select id, code, name, circle_id, circle, held::int, done_n::int, ex, ma, sh, trs, oth, cpct, pts, mrate, late_n::int,
-         public._store_level(done_n, held, mrate, cpct, late_n),
+         public._store_level(done_n::int, held::int, mrate, cpct, late_n::int),
          (dense_rank() over (order by pts desc, cpct asc nulls last))::int, (count(*) over ())::int,
          (dense_rank() over (partition by circle_id order by pts desc, cpct asc nulls last))::int, (count(*) over (partition by circle_id))::int
     from base
