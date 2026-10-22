@@ -172,23 +172,24 @@ async function rankStaff(el) {
     warn: ti('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8v.2"/>', '#DC2626'),
     truck: ti('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>', '#2563EB') };
   const topCard3 = (s, r) => `<div class="rpc3 w${r}">${crown(r)}<div class="rpc3-main"><span class="rkmedal m${r}">${r}</span>
-    <div class="rpc3-store"><b>${esc(s.code)}</b><span>${esc(s.name)} (${esc(s.circle)})</span><span>${rkLvlChip(s.level)}</span></div>
+    <div class="rpc3-store"><b>${esc(s.code)}</b><span>${rkLvlChip(s.level)}</span></div>
     <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>
-    <div class="rpc3-stats"><div title="India rank">${TI.flag}<b>#${s.pan_rank}</b></div><div title="Circle rank">${TI.users}<b>#${s.circle_rank}</b></div><div title="Cycles completed">${TI.cal}<b>${s.cycles_done}/${s.cycles_held}</b></div><div title="Match rate">${TI.bars}<b>${rkPct2(s.match_rate)}</b></div><div title="Genuine shortage %">${TI.warn}<b>${rkPct(rkCpct(s))}</b></div></div>
-    <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b></span><span class="q-sep">|</span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
+    <div class="rpc3-stats"><div><span>India Rank</span><b>#${s.pan_rank}</b></div><div><span>Circle Rank</span><b>#${s.circle_rank}</b></div><div><span>Cycles</span><b>${s.cycles_done}/${s.cycles_held}</b></div><div><span>Match Rate</span><b>${rkPct2(s.match_rate)}</b></div><div><span>Short %</span><b>${rkPct(rkCpct(s))}</b></div></div>
+    <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b></span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
   const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
   const SC = [
-    { k: 'pan_rank', w: 6, l: '# (India)', t: 'num', get: s => s.pan_rank, cell: s => ranked(s) ? `<b>${s.pan_rank}</b>` : '—' },
-    { k: 'circle_rank', w: 6, l: '# (Circle)', t: 'num', get: s => s.circle_rank, cell: s => ranked(s) ? `<b${s.circle_rank <= 3 ? ' class="rk-red"' : ''}>${s.circle_rank}</b>` : '—' },
-    { k: 'store', w: 17, l: 'Store', t: 'text', get: s => s.code + ' ' + s.name, cell: s => `<b>${esc(s.code)}</b><div class="muted" style="font-size:12px">${esc(s.name)}</div>` },
+    { k: 'pan_rank', w: 6, l: 'India Rank', t: 'num', get: s => s.pan_rank, cell: s => ranked(s) ? `<b>${s.pan_rank}</b>` : '—' },
+    { k: 'circle_rank', w: 6, l: 'Circle Rank', t: 'num', get: s => s.circle_rank, cell: s => ranked(s) ? `<b${s.circle_rank <= 3 ? ' class="rk-red"' : ''}>${s.circle_rank}</b>` : '—' },
+    { k: 'store', w: 16, l: 'Store', t: 'text', get: s => s.code + ' ' + s.name, cell: s => `<b>${esc(s.code)}</b>` },
     { k: 'circle', w: 6, l: 'Circle', t: 'text', get: s => s.circle, cell: s => esc(s.circle) },
     { k: 'level', w: 10, l: 'Level', t: 'text', get: s => s.level || 'Unranked', cell: s => rkLvlChip(s.level) },
     { k: 'points', w: 7, l: 'Points', t: 'num', get: s => s.points, cell: s => `<b>${rkPts(s.points)}</b>` },
-    { k: 'cycles_done', w: 9, l: 'Cycles', t: 'num', get: s => s.cycles_done, cell: s => `<div class="rk-cyc"><span>${s.cycles_done} / ${s.cycles_held}</span><span class="rk-cbar"><i style="width:${s.cycles_held ? 100 * s.cycles_done / s.cycles_held : 0}%"></i></span></div>` },
-    { k: 'match_rate', w: 8, l: 'Match Rate', t: 'num', get: s => s.match_rate, cell: s => rkPct2(s.match_rate) },
+    { k: 'cycles_done', w: 7, l: 'Cycles', t: 'num', get: s => s.cycles_done, cell: s => `${s.cycles_done} / ${s.cycles_held}` },
+    { k: 'match_rate', w: 9, l: 'Match Rate', t: 'num', get: s => s.match_rate, cell: s => rkPct2(s.match_rate) },
     { k: 'short_transit', w: 8, l: 'In Transit', t: 'num', get: s => s.short_transit, cell: s => rkPts(s.short_transit) },
-    { k: 'counted_short_pct', w: 10, l: 'Genuine Shortage %', t: 'num', get: s => rkCpct(s), cell: s => rkPct(rkCpct(s)) },
-    { k: 'go', w: 13, l: 'Action', ns: true, t: 'text', get: () => '', cell: s => `<span class="rk-act"><a class="rk-view" href="#/storedetail?s=${s.id}&from=ranking">${ic('eye', 14)} View</a><span class="rk-dw"><button type="button" class="rk-dots" data-dot="${s.id}" title="More actions">&#8942;</button><span class="rk-dmenu" hidden><a href="#/storedetail?s=${s.id}&from=ranking">View audit detail</a></span></span></span>` }];
+    { k: 'short_other', w: 7, l: 'Short', t: 'num', get: s => s.short_other, cell: s => rkPts(s.short_other) },
+    { k: 'counted_short_pct', w: 8, l: 'Short%', t: 'num', get: s => rkCpct(s), cell: s => rkPct(rkCpct(s)) },
+    { k: 'go', w: 10, l: 'Action', ns: true, t: 'text', get: () => '', cell: s => `<a class="rk-view" href="#/storedetail?s=${s.id}&from=ranking">${ic('eye', 14)} View</a>` }];
   const CC = [
     { k: 'circle_rank', w: 9, l: 'Circle rank', t: 'num', get: c => c.circle_rank, cell: c => rkPill(c.circle_rank, c.cycles_done > 0) },
     { k: 'circle', w: 10, l: 'Circle', t: 'text', get: c => c.circle, cell: c => `<b>${esc(c.circle)}</b>` },
@@ -237,7 +238,7 @@ const rkTopCard = (c, s) => `<div class="tcard">
     const p0 = Math.max(1, Math.min(F.page - 2, pages - 4)), p1 = Math.min(pages, p0 + 4);
     let btns = '';
     for (let p = p0; p <= p1; p++) btns += `<button type="button" class="${p === F.page ? 'on' : ''}" data-pg="${p}">${p}</button>`;
-    return `<div class="rk-pager"><span class="muted">Showing ${from} &ndash; ${to} of ${total} stores</span><div class="rk-pg-right"><div class="pg"><button type="button" data-pg="${F.page - 1}" ${F.page <= 1 ? 'disabled' : ''}>&lsaquo;</button>${btns}<button type="button" data-pg="${F.page + 1}" ${F.page >= pages ? 'disabled' : ''}>&rsaquo;</button></div><label class="rk-ps"><select id="rk-ps">${[10, 25, 50].map(n => `<option value="${n}" ${n === F.ps ? 'selected' : ''}>${n}</option>`).join('')}</select> / page</label></div></div>`;
+    return `<div class="rk-pager"><span class="muted">Showing ${from} &ndash; ${to} of ${total} stores</span><div class="rk-pg-right"><label class="rk-ps">Rows per page <select id="rk-ps">${[10, 20, 50].map(n => `<option value="${n}" ${n === F.ps ? 'selected' : ''}>${n}</option>`).join('')}</select></label><div class="pg"><button type="button" data-pg="${F.page - 1}" ${F.page <= 1 ? 'disabled' : ''}>&lsaquo;</button>${btns}<button type="button" data-pg="${F.page + 1}" ${F.page >= pages ? 'disabled' : ''}>&rsaquo;</button></div></div></div>`;
   };
   const draw = () => {
     el.querySelectorAll('#rk-tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.t === F.tab));
@@ -262,11 +263,11 @@ const rkTopCard = (c, s) => `<div class="tcard">
       const nT = stores.length, nC = stores.filter(s => s.cycles_held > 0 && s.cycles_done >= s.cycles_held).length,
         nP = stores.filter(s => s.cycles_done > 0 && s.cycles_done < s.cycles_held).length, nN = stores.filter(s => !s.cycles_done).length;
       const pctOf = n => nT ? (Math.round(1000 * n / nT) / 10) + '%' : '—';
-      const stat = (cls, icon, val, label, barPct) => `<div class="card rk-stat"><span class="rk-ric ${cls}">${icon}</span><div class="rk-sm"><div class="rk-sv">${val}</div><small>${label}</small>${barPct != null ? `<div class="bar2 rk-sbar ${cls}"><i style="width:${barPct}%"></i></div>` : ''}</div></div>`;
-      const stats = `<div class="rk-stats">${stat('b', ic('store', 19), nT.toLocaleString('en-IN'), 'Total Stores', null)}
-        ${stat('g', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" opacity=".18"/><path d="M8.5 12.5l2.4 2.4L15.7 9.6"/></svg>', pctOf(nC), 'Completed', nT ? 100 * nC / nT : 0)}
-        ${stat('a', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>', pctOf(nP), 'In Progress', nT ? 100 * nP / nT : 0)}
-        ${stat('gr', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>', pctOf(nN), 'Not Started', nT ? 100 * nN / nT : 0)}</div>`;
+      const stat = (cls, icon, label, val, sub, barPct) => `<div class="card rk-stat"><span class="rk-ric ${cls}">${icon}</span><div class="rk-sm"><small>${label}</small><div class="rk-sv">${val}</div>${sub ? `<div class="rk-ssub">${sub}</div>` : ''}${barPct != null ? `<div class="bar2 rk-sbar ${cls}"><i style="width:${barPct}%"></i></div>` : ''}</div></div>`;
+      const stats = `<div class="rk-stats">${stat('b', ic('store', 19), 'Total Stores', nT.toLocaleString('en-IN'), 'Stores', null)}
+        ${stat('g', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" opacity=".18"/><path d="M8.5 12.5l2.4 2.4L15.7 9.6"/></svg>', 'Completed', pctOf(nC), `${nC} / ${nT} stores`, nT ? 100 * nC / nT : 0)}
+        ${stat('a', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>', 'In Progress', pctOf(nP), `${nP} / ${nT} stores`, nT ? 100 * nP / nT : 0)}
+        ${stat('gr', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>', 'Not Started', pctOf(nN), `${nN} / ${nT} stores`, nT ? 100 * nN / nT : 0)}</div>`;
       // With the Top 3 shown above and no filter/search/sort active, the table starts at rank 4 (design module).
       const excl = admin && top3.length > 0 && !F.c && !q && !SS.sort;
       const tRows = excl ? rows.filter(s => !top3.some(t => t.id === s.id)) : rows;
@@ -283,8 +284,6 @@ const rkTopCard = (c, s) => `<div class="tcard">
         if (pg) { if (!pg.disabled) { F.page = +pg.dataset.pg; draw(); } return; }
         if (t.closest('#rk-expx')) { body.querySelector('#rk-expmenu').hidden = true; exportRanking(); return; }
         if (t.closest('#rk-exp')) { const m = body.querySelector('#rk-expmenu'); m.hidden = !m.hidden; return; }
-        const dot = t.closest('[data-dot]');
-        if (dot) { const m = dot.parentElement.querySelector('.rk-dmenu'), was = m.hidden; body.querySelectorAll('.rk-dmenu').forEach(x => x.hidden = true); m.hidden = !was; return; }
         body.querySelectorAll('.rk-dmenu').forEach(x => x.hidden = true);
         rkSortClick(e, SS, draw);
       };
