@@ -433,24 +433,38 @@ async function downloadVariance(sid, storeCode, cycleName, btn) {
 }
 async function resultView(el, sid, embedded) {
   const staff = isStaff();
-  const cnt = async ser => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser)).count) || 0;
-  const [si, sm, nSer, nNon, vbR, fvR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,store_id,audit_cycle_id,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true), cnt(false), sb.rpc('store_variance_breakdown', { p_session: sid }), sb.rpc('result_filter_values', { p_session: sid })]);
+  const cnt = async (ser, res) => { let q = sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser); if (res) q = q.eq('result', res); return ((await q).count) || 0; };
+  const [si, sm, nSerS, nNonS, vbR, fvR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,store_id,audit_cycle_id,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true, 'SHORT'), cnt(false, 'SHORT'), sb.rpc('store_variance_breakdown', { p_session: sid }), sb.rpc('result_filter_values', { p_session: sid })]);
   if (si.error || !si.data) throw si.error || new Error('Result not found');
   if (sm.error) throw sm.error;
-  const ss = si.data, m = sm.data; let tab = 'ALL', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
+  const ss = si.data, m = sm.data; let tab = 'SERSHORT', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
   const subCache = {}; let rows = [];
   const fv = fvR && !fvR.error && fvR.data ? fvR.data : null;      // distinct values for the click-to-select filters (database/19)
   const fetchFV = async c => { const col = c.col || c.k; const r = await sb.from('reconciliation_results').select(col).eq('session_id', sid); return r.error || !r.data ? null : r.data.map(x => x[col]); };   // on-demand fallback: keeps the tick-list UI even when the RPC has no values
   /* remarks on short items (optional; the column is skipped if the remarks table is not installed yet) */
   const rkey = r => [r.item_code, r.inventory_status || '', r.item_quality || '', r.item_sno || ''].join('\u0001');
-  const rmR = await sb.from('result_remarks').select('item_code,inventory_status,item_quality,item_sno,remark').eq('store_id', ss.store_id).eq('audit_cycle_id', ss.audit_cycle_id);
-  const rmkOk = !rmR.error, rmk = {}; if (rmkOk) rmR.data.forEach(r => { rmk[rkey(r)] = r.remark; });
+  let rmR = await sb.from('result_remarks').select('item_code,inventory_status,item_quality,item_sno,remark,category_id,reference,qty,status,accepted_qty').eq('store_id', ss.store_id).eq('audit_cycle_id', ss.audit_cycle_id);
+  const revDb = !rmR.error;          // structured revision (database/32) present?
+  if (rmR.error) rmR = await sb.from('result_remarks').select('item_code,inventory_status,item_quality,item_sno,remark').eq('store_id', ss.store_id).eq('audit_cycle_id', ss.audit_cycle_id);
+  const rmkOk = !rmR.error, rmk = {}; if (rmkOk) rmR.data.forEach(r => { rmk[rkey(r)] = r; });
+  const catR = await sb.rpc('remark_categories_list');
+  const cats = revDb && !catR.error && Array.isArray(catR.data) ? catR.data : null, catById = {};
+  if (cats) cats.forEach(c => { catById[c.id] = c; });
   const canEdit = rmkOk && !staff && ss.status === 'LOCKED';
-  const tabs = [['ALL', 'All Items', m.rows_all], ['SERIAL', 'Serialized', nSer], ['NONSERIAL', 'Non-Serialized', nNon], ['MATCH', 'Matched', m.rows_match], ['SHORT', 'Short', m.rows_short], ['EXCESS', 'Excess', m.rows_excess]];
+  /* shortage-first tabs: the page opens on shortage lines only (few rows, fast, remarks right there);
+     Excess / Matched / All Items query the database only when the user clicks them */
+  const tabs = [['SERSHORT', 'Serialized Shortage', nSerS], ['NONSHORT', 'Non-Serialized Shortage', nNonS], ['EXCESS', 'Excess', m.rows_excess], ['MATCH', 'Matched', m.rows_match], ['ALL', 'All Items', m.rows_all]];
+  tab = nSerS > 0 ? 'SERSHORT' : nNonS > 0 ? 'NONSHORT' : Number(m.rows_excess) > 0 ? 'EXCESS' : 'ALL';
   const matched = Number(m.matched), shortU = Number(m.short), excessU = Number(m.excess);
   const vb = Object.assign({ ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, (vbR && vbR.data) || {});
   const rate = m.match_rate == null ? null : Number(m.match_rate);
   const trs = Number(m.short_transit || 0), shSub = m.short_transit == null || !shortU ? '' : `In transit ${fn(trs)} · Other ${fn(shortU - trs)}`;      // split only; the Short figure itself is unchanged
+  /* shortage revision strip: reported genuine -> accepted (explained) -> revised genuine; pending shown separately and changes nothing yet */
+  const genShort = Math.max(0, shortU - trs);
+  const revList = revDb ? Object.values(rmk) : [];
+  const revAcc = revList.reduce((a, e) => a + (e.status === 'REVIEWED' ? Number(e.accepted_qty) || 0 : 0), 0);
+  const revPend = revList.filter(e => e.status !== 'REVIEWED').reduce((a, e) => a + (Number(e.qty) || 0), 0);
+  const revStrip = revDb && (revAcc > 0 || revPend > 0) ? `<div class="card revstrip"><span class="rvt">${ic('clip', 16)} Shortage revision</span><span>Reported genuine <b>${fn(genShort)}</b></span><span class="rvarr">→</span><span>Explained (accepted) <b class="g">${fn(revAcc)}</b></span><span class="rvarr">→</span><span>Revised genuine shortage <b class="r">${fn(Math.max(0, genShort - revAcc))}</b></span>${revPend ? `<span class="rvp">${fn(revPend)} awaiting review</span>` : ''}</div>` : '';
   const stat = (cls, icon, label, val, sub = '') => `<div class="rst"><span class="ric ${cls}">${ic(icon, 26)}</span><div><small>${label}</small><b class="${cls}">${val}</b>${sub ? `<em>${sub}</em>` : ''}</div></div>`;
   const pill = (cls, icon, html) => `<span class="pl ${cls}">${ic(icon, 15)}<span>${html}</span></span>`;
   const pills = [pill('g', 'check', `<b>${fn(m.rows_match)}</b> matched lines`), pill('r', 'alert', `<b>${fn(m.rows_short)}</b> short lines`), pill('y', 'zap', `<b>${fn(m.rows_excess)}</b> excess lines`),
@@ -462,7 +476,8 @@ async function resultView(el, sid, embedded) {
     <div class="card rsum2"><div class="rtop"><div class="rdon">${donut([{ v: matched, color: '#16A34A' }, { v: shortU, color: '#E5484D' }, { v: excessU, color: '#F5B301' }], rate == null ? '—' : rate.toFixed(1) + '%', 'Match Rate', 130, 12)}</div>
       <div class="rstats">${stat('', 'box', 'Expected', fn(m.expected))}${stat('g', 'check', 'Found', fn(m.physical))}${stat('r', 'alert', 'Short', fn(shortU), shSub)}${stat('y', 'trend', 'Excess', fn(excessU))}</div></div>
       <div class="rpills">${pills}</div></div>
-    <div class="rtool"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div>
+    ${revStrip}
+    <div class="rtool"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SERSHORT' || t[0] === 'NONSHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div>
       <div class="inp rsearch">${ic('search', 18)}<input id="q" placeholder="Search item code, description or serial..."></div></div>
     <div class="subtabs" id="rsub" hidden></div><div class="fchips" id="rchips" hidden></div><div id="rt"></div></div>`;
 
@@ -474,7 +489,7 @@ async function resultView(el, sid, embedded) {
   const WIDTHS = rmkOk ? [4, 9, 15, 9, 5, 7, 7, 7, 7, 11, 7, 12] : [4, 10, 19, 10, 6, 8, 8, 8, 7, 12, 8];     // % of the table width: it always fits, no sideways scrolling
   const ib = v => !v ? '—' : `<span class="ib ${/transit/i.test(v) ? 'b' : /^active$/i.test(v) ? 'g' : 'n'}">${esc(v)}</span>`;
 
-  const split = () => tab === 'SERIAL' || tab === 'NONSERIAL';
+  const split = () => false;      // the old Serialized/Non-Serialized sub-tabs are gone: the five tabs above are flat now
   async function subCounts() {
     if (subCache[tab]) return subCache[tab]; const ser = tab === 'SERIAL';
     const c = async r => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser).eq('result', r)).count) || 0;
@@ -488,15 +503,35 @@ async function resultView(el, sid, embedded) {
   const mark = () => { el.querySelectorAll('#rtabs [data-ty]').forEach(b => b.classList.toggle('on', b.dataset.ty === tab)); drawSub(); CF.chips(el.querySelector('#rchips')); };
   async function load() {
     mark(); const rt = el.querySelector('#rt'); rt.innerHTML = universeLoader();
-    let qb = sb.from('reconciliation_results').select('item_code,inventory_status,item_description,item_uom,expected_qty,physical_qty,item_quality,item_sno,result,is_unlisted', { count: 'exact' }).eq('session_id', sid);
-    if (tab === 'SERIAL') qb = qb.eq('is_serialized', true); else if (tab === 'NONSERIAL') qb = qb.eq('is_serialized', false); else if (tab !== 'ALL') qb = qb.eq('result', tab);
-    if (split() && sub !== 'ALL') qb = qb.eq('result', sub);
+    let qb = sb.from('reconciliation_results').select('item_code,inventory_status,item_description,item_uom,expected_qty,physical_qty,item_quality,item_sno,result,is_unlisted,is_serialized,short_qty', { count: 'exact' }).eq('session_id', sid);
+    if (tab === 'SERSHORT') qb = qb.eq('is_serialized', true).eq('result', 'SHORT');
+    else if (tab === 'NONSHORT') qb = qb.eq('is_serialized', false).eq('result', 'SHORT');
+    else if (tab === 'EXCESS') qb = qb.eq('result', 'EXCESS');
+    else if (tab === 'MATCH') qb = qb.eq('result', 'MATCH');
     const t = q.replace(/[,()%*\\]/g, ' ').trim(); if (t) qb = qb.or(`item_code.ilike.*${t}*,item_sno.ilike.*${t}*,item_description.ilike.*${t}*`);
     qb = CF.apply(qb);
     const { data, error, count } = await qb.order('item_code').order('item_sno').range(page * PS, page * PS + PS - 1);
-    if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))}</div>`; return; }
+    if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))} <button type="button" class="btn sm" data-retry style="margin-left:8px">Retry</button></div>`; return; }
     rows = data;
-    const rbox = (r, i) => { if (!rmkOk || r.result !== 'SHORT') return ''; const v = rmk[rkey(r)] || ''; return canEdit ? `<div class="rmkw"><input class="rmk" data-i="${i}" maxlength="500" placeholder="Add remarks (optional)" value="${esc(v)}" aria-label="Remarks for ${esc(r.item_code)}"><span class="rmks"></span></div>` : (v ? `<div class="rmkr">${esc(v)}</div>` : ''); };
+    const rbox = (r, i) => { if (!rmkOk || r.result !== 'SHORT') return ''; const e = rmk[rkey(r)];
+      if (revDb && cats) {           // structured revision UI (database/32)
+        if (/transit/i.test(r.inventory_status || '')) return '<span class="muted" style="font-size:12px">In transit — already excluded</span>';
+        const chips = [];
+        if (e) {
+          const cat = e.category_id ? catById[e.category_id] : null;
+          chips.push(`<span class="rchip cat">${esc(cat ? cat.name : 'Remark')}</span>`);
+          if (e.status === 'REVIEWED') { const a = Number(e.accepted_qty) || 0, cq = Number(e.qty) || Number(r.short_qty) || 0;
+            chips.push(a <= 0 ? '<span class="rchip rej">Not accepted</span>' : a >= cq ? '<span class="rchip acc">Accepted</span>' : `<span class="rchip part">Accepted ${fn(a)} of ${fn(cq)}</span>`); }
+          else chips.push('<span class="rchip pen">Pending review</span>');
+          if (e.reference) chips.push(`<span class="rref">${esc(e.reference)}</span>`);
+          if (e.remark) chips.push(`<div class="rmkr">${esc(e.remark)}</div>`);
+        }
+        const btn = canEdit && (!e || e.status !== 'REVIEWED') ? `<button type="button" class="btn sm ${e ? '' : 'yel'} radd" data-radd="${i}">${e ? 'Edit remark' : 'Add remark'}</button>` : '';
+        const del = canEdit && e && e.status !== 'REVIEWED' ? `<button type="button" class="rlink" data-rdel="${i}">Remove</button>` : '';
+        return `<div class="rwrap">${chips.join(' ')}${btn}${del}</div>`;
+      }
+      const v = e ? (e.remark || '') : '';           // legacy plain-text remarks (pre-32 database)
+      return canEdit ? `<div class="rmkw"><input class="rmk" data-i="${i}" maxlength="500" placeholder="Add remarks (optional)" value="${esc(v)}" aria-label="Remarks for ${esc(r.item_code)}"><span class="rmks"></span></div>` : (v ? `<div class="rmkr">${esc(v)}</div>` : ''); };
     const SHORTL = { expected_qty: ['Expected', 'Exp.'], physical_qty: ['Physical', 'Phys.'], variance: ['Variance', 'Var.'] };      // the short form shows on narrower screens
     const heads = ['#', ...HEADS.map(k => CF.th(k, SHORTL[k] ? `<span class="lf">${SHORTL[k][0]}</span><span class="ls">${SHORTL[k][1]}</span>` : undefined)), ...(rmkOk ? ['Remarks'] : [])];
     const body = data.map((r, i) => { const v = Number(r.physical_qty) - Number(r.expected_qty), d = r.item_description || '';
@@ -510,16 +545,46 @@ async function resultView(el, sid, embedded) {
         <div class="pgn"><button type="button" class="pgb" data-pgn="${page - 1}" ${page ? '' : 'disabled'}>‹ Previous</button>${nums.map(x => x === '…' ? '<span class="pge">…</span>' : `<button type="button" class="pgb ${x === page ? 'on' : ''}" data-pgn="${x}">${x + 1}</button>`).join('')}<button type="button" class="pgb" data-pgn="${page + 1}" ${(page + 1) * PS < count ? '' : 'disabled'}>Next ›</button></div></div></div>`;
   }
   el.onclick = e => { if (CF.handle(e)) return;
+    const rt3 = e.target.closest('[data-retry]'); if (rt3) { load(); return; }
+    const ab = e.target.closest('[data-radd]'); if (ab) { openRemark(rows[+ab.dataset.radd]); return; }
+    const db2 = e.target.closest('[data-rdel]'); if (db2) { delRemark(rows[+db2.dataset.rdel]); return; }
     const t = e.target.closest('#rtabs [data-ty]'); if (t) { tab = t.dataset.ty; sub = 'ALL'; page = 0; return load(); }
     const sb2 = e.target.closest('[data-sub]'); if (sb2) { sub = sb2.dataset.sub; page = 0; return load(); }
     const g = e.target.closest('[data-pgn]'); if (g && !g.disabled) { page = Number(g.dataset.pgn); load().then(() => el.querySelector('#rtabs').scrollIntoView({ block: 'start', behavior: 'smooth' })); } };
   el.onchange = async e => {
     const inp = e.target.closest('.rmk'); if (!inp) return; const r = rows[+inp.dataset.i], st = inp.parentElement.querySelector('.rmks'), val = inp.value.trim();
-    if (!r || val === (rmk[rkey(r)] || '')) return; st.textContent = 'Saving…'; st.className = 'rmks';
+    if (!r || val === ((rmk[rkey(r)] || {}).remark || '')) return; st.textContent = 'Saving…'; st.className = 'rmks';
     const { error } = await sb.rpc('set_result_remark', { p_session: sid, p_item_code: r.item_code, p_status: r.inventory_status || '', p_quality: r.item_quality || '', p_sno: r.item_sno || '', p_remark: val });
     if (error) { st.textContent = 'Not saved'; st.className = 'rmks err'; toast(rpcMsg(error), 'err'); return; }
-    if (val) rmk[rkey(r)] = val; else delete rmk[rkey(r)]; st.textContent = val ? 'Saved ✓' : 'Removed'; st.className = 'rmks ok'; setTimeout(() => { st.textContent = ''; }, 2500);
+    if (val) rmk[rkey(r)] = Object.assign({}, rmk[rkey(r)], { remark: val }); else delete rmk[rkey(r)]; st.textContent = val ? 'Saved ✓' : 'Removed'; st.className = 'rmks ok'; setTimeout(() => { st.textContent = ''; }, 2500);
   };
+  /* ---- structured shortage remark (database/32): category + quantity + reference, reviewed by management ---- */
+  function openRemark(r) {
+    if (!r) return; const e = rmk[rkey(r)]; const max = Number(r.short_qty) || 1;
+    const body = `<div class="fld"><label>Item</label><div><b>${esc(r.item_code)}</b>${r.item_sno ? ` · SN ${esc(r.item_sno)}` : ''} · Short qty <b>${fn(max)}</b></div></div>
+      <div class="fld"><label for="rk-cat">Remark category</label><div class="inp"><select id="rk-cat"><option value="">— Select —</option>${cats.filter(c => c.active).map(c => `<option value="${c.id}" ${e && e.category_id === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div></div>
+      ${r.is_serialized ? '' : `<div class="fld"><label for="rk-qty">Quantity explained (max ${fn(max)})</label><div class="inp"><input id="rk-qty" type="number" min="0" step="any" max="${max}" value="${e && e.qty != null ? e.qty : max}"></div></div>`}
+      <div class="fld" id="rk-refw"><label for="rk-ref" id="rk-refl">Reference</label><div class="inp"><input id="rk-ref" maxlength="200" value="${e ? esc(e.reference || '') : ''}"></div></div>
+      <div class="fld"><label for="rk-note">Note (optional)</label><div class="inp"><input id="rk-note" maxlength="500" value="${e ? esc(e.remark || '') : ''}"></div></div>
+      <p class="muted" style="font-size:12px;margin:2px 0 0">The shortage reduces only for the quantity management accepts after review.</p>`;
+    const o = openModal('Shortage remark — ' + r.item_code, body, [cancelBtn, { label: 'Save remark', cls: 'yel', fn: async (ov) => {
+      const cid = ov.querySelector('#rk-cat').value || null, ref = ov.querySelector('#rk-ref').value.trim(), note = ov.querySelector('#rk-note').value.trim();
+      const qEl = ov.querySelector('#rk-qty'), qty = qEl ? Number(qEl.value) : max;
+      const { error } = await sb.rpc('save_shortage_remark', { p_session: sid, p_item_code: r.item_code, p_status: r.inventory_status || '', p_quality: r.item_quality || '', p_sno: r.item_sno || '', p_category: cid, p_reference: ref, p_qty: isNaN(qty) ? max : qty, p_remark: note });
+      if (error) { toast(rpcMsg(error), 'err'); return false; }
+      rmk[rkey(r)] = { item_code: r.item_code, inventory_status: r.inventory_status || '', item_quality: r.item_quality || '', item_sno: r.item_sno || '', remark: note, category_id: cid, reference: ref || null, qty: isNaN(qty) ? max : qty, status: 'PENDING', accepted_qty: null };
+      toast('Remark saved — sent for review.', 'ok'); load();
+    } }]);
+    const sel = o.querySelector('#rk-cat'), refW = o.querySelector('#rk-refw'), refL = o.querySelector('#rk-refl'), refI = o.querySelector('#rk-ref');
+    const sync = () => { const c = cats.find(x => x.id === sel.value); if (!c) { refW.style.display = 'none'; return; } refW.style.display = ''; refL.textContent = c.ref_label + (c.ref_required ? ' *' : ' (optional)'); refI.placeholder = c.ref_label; };
+    sel.onchange = sync; sync();
+  }
+  async function delRemark(r) {
+    if (!r) return;
+    const { error } = await sb.rpc('delete_shortage_remark', { p_session: sid, p_item_code: r.item_code, p_status: r.inventory_status || '', p_quality: r.item_quality || '', p_sno: r.item_sno || '' });
+    if (error) { toast(rpcMsg(error), 'err'); return; }
+    delete rmk[rkey(r)]; toast('Remark removed.', 'ok'); load();
+  }
   el.querySelector('#q').oninput = e => { clearTimeout(timer); const v = e.target.value; timer = setTimeout(() => { q = v; page = 0; load(); }, 300); };
   el.querySelector('#vdl').onclick = e => downloadVariance(sid, (ss.stores && ss.stores.code) || 'store', (ss.audit_cycles && ss.audit_cycles.name) || 'cycle', e.currentTarget).catch(err => toast(friendlyError(err), 'err'));
   await load();

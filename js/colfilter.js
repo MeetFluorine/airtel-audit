@@ -42,10 +42,11 @@ function colFilters(cols, fv, onChange, fetchVals) {
     if (!box) return; const keys = Object.keys(F); box.hidden = !keys.length; if (!keys.length) { box.innerHTML = ''; return; }
     box.innerHTML = keys.map(k => `<span class="fchip">${esc(desc(k, F[k]))}<button type="button" data-rm="${k}" aria-label="Remove filter">×</button></span>`).join('') + '<button type="button" class="btn sm" data-rm="*">Clear all filters</button>';
   }
-  let popOff = null;
-  function close() { const p = document.getElementById('cfpop'); if (p) p.remove(); if (popOff) { popOff(); popOff = null; } }
+  let popOff = null, openSeq = 0;
+  function close() { document.querySelectorAll('#cfpop').forEach(p => p.remove()); if (popOff) { popOff(); popOff = null; } }
   async function open(k, btn) {
-    close(); const c = byK(k), t = c.t, cur = F[k] || {}, vs = t === 'list' ? (await listVals(c)) || [] : [], sel = new Set(cur.in || []);
+    close(); const my = ++openSeq; const c = byK(k), t = c.t, cur = F[k] || {}, vs = t === 'list' ? (await listVals(c)) || [] : [], sel = new Set(cur.in || []);
+    if (my !== openSeq) return;      // superseded by a newer open/close while the values were loading - a stale popup (and its listeners) must never land
     const pop = document.createElement('div'); pop.className = 'cfpop'; pop.id = 'cfpop'; pop.dataset.col = k;
     pop.innerHTML = `<div class="cft">${esc(c.l)}</div>` + (t === 'list' ? `<input class="cfs" placeholder="Search values…" autocomplete="off"><div class="cfa"><button type="button" data-a="all">Select all</button><button type="button" data-a="none">Clear</button></div>
         <div class="cfl">${vs.map((v, i) => `<label class="chk" data-s="${esc(vlabel(c, v).toLowerCase())}"><input type="checkbox" data-i="${i}" ${sel.has(v) ? 'checked' : ''}> <span>${esc(vlabel(c, v))}</span></label>`).join('') || '<div class="muted">No values</div>'}</div>`
@@ -64,7 +65,8 @@ function colFilters(cols, fv, onChange, fetchVals) {
       pop.querySelectorAll('input[data-i]').forEach(x => { if (!x.closest('label').hidden) x.checked = a.dataset.a === 'all'; }); };
     const s = pop.querySelector('.cfs'); if (s) s.oninput = () => { const q = s.value.trim().toLowerCase(); pop.querySelectorAll('.cfl label').forEach(l => (l.hidden = !!q && !l.dataset.s.includes(q))); };
     pop.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') done(true); });
-    const out = e => { if (!pop.contains(e.target) && !e.target.closest('[data-cf]')) close(); }, key = e => { if (e.key === 'Escape') close(); };
+    pop.addEventListener('mousedown', e => e.stopPropagation());      // clicks inside the popup are never "outside" clicks
+    const out = e => { const live = document.getElementById('cfpop'); if (live && !live.contains(e.target) && !e.target.closest('[data-cf]')) close(); }, key = e => { if (e.key === 'Escape') close(); };
     setTimeout(() => document.addEventListener('mousedown', out), 0); document.addEventListener('keydown', key); popOff = () => { document.removeEventListener('mousedown', out); document.removeEventListener('keydown', key); };
     (pop.querySelector('.cfs') || pop.querySelector('.cfi') || pop.querySelector('.cfmin') || pop).focus();
   }

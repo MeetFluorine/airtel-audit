@@ -3,17 +3,17 @@ const ROLE_LABEL = { ADMIN: 'Administrator', CIRCLE_HEAD: 'Circle Head', STORE_U
 const NAV_STORE = [['dashboard', 'Dashboard', 'home'], ['basedata', 'Base Data', 'box'], ['audit', 'Start Audit', 'play'], ['result', 'My Result', 'clip'], ['ranking', 'Ranking', 'trend'], ['profile', 'My Profile', 'user']];
 const NAV_STAFF = [{ k: 'dashboard', t: 'Dashboard', i: 'home' }, { k: 'ranking', t: 'Ranking', i: 'trend' },
   { g: 'mgmt', t: 'Management', i: 'grid', kids: [['stores', 'Stores'], ['users', 'Users']] },
-  { g: 'ops', t: 'Operations', i: 'scan', kids: [['storeaudit', 'Store Audit'], ['basestock', 'Base Stock']] },
+  { g: 'ops', t: 'Operations', i: 'scan', kids: [['storeaudit', 'Store Audit'], ['basestock', 'Base Stock'], ['review', 'Shortage Review']] },
   { g: 'reports', t: 'Reports', i: 'file', kids: [['reports', 'Reports'], ['logs', 'Audit Logs']] },
   { k: 'profile', t: 'My Account', i: 'user' }];
 const FLY = {   // sub-menus open in a flyout beside the sidebar (title, description, icon)
   reports: [['reports', 'Reports', 'Download audit reports and Excel exports', 'file'], ['logs', 'Audit Logs', 'Track activities and changes in the system', 'clip']],
   mgmt: [['stores', 'Stores', 'Manage stores, circles and store types', 'store'], ['users', 'Users', 'Approve users, roles and store assignments', 'users']],
-  ops: [['storeaudit', 'Store Audit', 'Monitor store-wise progress and drill down', 'scan'], ['basestock', 'Base Stock', "Upload and freeze each store's base stock", 'box']] };
-const GROUP_OF = { reports: 'reports', logs: 'reports', stores: 'mgmt', users: 'mgmt', storeaudit: 'ops', basestock: 'ops', storedetail: 'ops', result: 'ops' };
+  ops: [['storeaudit', 'Store Audit', 'Monitor store-wise progress and drill down', 'scan'], ['basestock', 'Base Stock', "Upload and freeze each store's base stock", 'box'], ['review', 'Shortage Review', 'Accept store remarks on genuine shortage', 'clip']] };
+const GROUP_OF = { reports: 'reports', logs: 'reports', stores: 'mgmt', users: 'mgmt', storeaudit: 'ops', basestock: 'ops', storedetail: 'ops', result: 'ops', review: 'ops' };
 const HEAD = { dashboard: ['Dashboard', ''], reports: ['Reports', 'Download audit reports, analytics and export data.'], logs: ['Audit Logs', 'Track all activities and changes in the system.'],
   stores: ['Stores', 'Manage all stores across circles.'], users: ['Users', 'Manage application users, roles and store assignments.'], storeaudit: ['Store Audit', 'Monitor store-wise audit progress, view variances and drill down to detailed records.'],
-  basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'],
+  basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], review: ['Shortage Review', 'Review store remarks on genuine shortage — accepted quantities stop counting as shortage, ranking updates live.'], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'],
   ranking: ['Ranking', 'Store and circle ranking based on audit results and participation.'] };
 
 const S = { session: null, profile: null, store: null, circles: [], recovery: false, cycles: [], cycleId: null, cycleName: '', progress: null, openGroup: null, ctx: null, shellUser: null };
@@ -126,7 +126,7 @@ function holdView(rejected) {
 
 /* ---------- shell ---------- */
 function resolvePage(h, staff) {
-  const ok = staff ? ['dashboard', 'reports', 'logs', 'stores', 'users', 'storeaudit', 'basestock', 'storedetail', 'result', 'ranking', 'profile'] : ['dashboard', 'basedata', 'audit', 'result', 'ranking', 'profile'];
+  const ok = staff ? ['dashboard', 'reports', 'logs', 'stores', 'users', 'storeaudit', 'basestock', 'storedetail', 'result', 'ranking', 'profile', 'review'] : ['dashboard', 'basedata', 'audit', 'result', 'ranking', 'profile'];
   return ok.includes(h) ? h : 'dashboard';
 }
 const userCard = (sub) => `<div class="usercard"><a class="avatar" href="#/profile" title="My profile">${esc(initials(S.profile.full_name))}</a><div class="un"><b>${esc(S.profile.full_name)}</b><small>${sub}</small><small>${ROLE_LABEL[S.profile.role]}</small></div><button class="lo" id="out" title="Log out">${ic('logout', 20)}</button></div>`;

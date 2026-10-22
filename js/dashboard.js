@@ -160,15 +160,23 @@ async function adminDash(el) {
     const others = Math.max(0, T.expected - T.matched - T.short), stockTot = T.matched + T.short + T.excess + others;
     const bd = AD.breakdown, bdn = v => Math.max(0, Math.round(Number(v) || 0));
     const shTransit = bd ? bdn(bd.short_transit) : 0, shSer = bd ? bdn(bd.ser_short) : 0, shNon = bd ? bdn(bd.non_short) : 0;
+    /* shortage revision (database/32): accepted remarks explain part of the genuine shortage; the donut then
+       shows the revised serialized / non-serialized split plus the explained slice, legend ends at the revised genuine total */
+    const hasRev = bd && bd.short_explained != null && bdn(bd.short_explained) > 0;
+    const shExpl = hasRev ? bdn(bd.short_explained) : 0, shSerV = hasRev ? bdn(bd.ser_short_rev) : shSer, shNonV = hasRev ? bdn(bd.non_short_rev) : shNon;
     const donutParts = bd
-      ? [{ v: T.matched, color: '#16A34A' }, { v: shTransit, color: '#FCA5A5' }, { v: shSer, color: '#E5484D' }, { v: shNon, color: '#F59E0B' }, { v: T.excess, color: '#F8B814' }, { v: others, color: '#7D8A99' }]
+      ? (hasRev
+        ? [{ v: T.matched, color: '#16A34A' }, { v: shTransit, color: '#FCA5A5' }, { v: shSerV, color: '#E5484D' }, { v: shNonV, color: '#F59E0B' }, { v: shExpl, color: '#14B8A6' }, { v: T.excess, color: '#F8B814' }, { v: others, color: '#7D8A99' }]
+        : [{ v: T.matched, color: '#16A34A' }, { v: shTransit, color: '#FCA5A5' }, { v: shSer, color: '#E5484D' }, { v: shNon, color: '#F59E0B' }, { v: T.excess, color: '#F8B814' }, { v: others, color: '#7D8A99' }])
       : [{ v: T.matched, color: '#16A34A' }, { v: T.short, color: '#F0383B' }, { v: T.excess, color: '#F8B814' }, { v: others, color: '#7D8A99' }];
     const legRow = (label, val, color, tint, legend, tip) => {
       const attrs = legend ? ` class="tint lk" role="button" tabindex="0" data-legend="${legend}" title="Rank circles by ${label.toLowerCase()} units"` : ` class="tint"${tip ? ` title="${tip}"` : ''}`;
       return `<div${attrs} style="--tint:${tint};--pill:${color}"><i style="background:${color}"></i><span>${label}</span><b>${fn(val)}</b><span class="p">${stockTot ? (100 * val / stockTot).toFixed(1) : '0.0'}%</span></div>`;
     };
     const legSub = (label, val, color) => `<div class="sub" title="${T.short ? (100 * val / T.short).toFixed(1) : '0.0'}% of total shortage"><i style="background:${color}"></i><span>${label}</span><b>${fn(val)}</b><span class="p">${T.short ? (100 * val / T.short).toFixed(1) : '0.0'}%</span></div>`;
-    const shortSubs = bd ? `<div class="tree">${legSub('In transit', shTransit, '#FCA5A5')}${legSub('Serialized', shSer, '#E5484D')}${legSub('Non-serialized', shNon, '#F59E0B')}</div>` : '';
+    const shortSubs = bd ? (hasRev
+      ? `<div class="tree">${legSub('In transit', shTransit, '#FCA5A5')}${legSub('Serialized', shSerV, '#E5484D')}${legSub('Non-serialized', shNonV, '#F59E0B')}${legSub('Explained (accepted)', shExpl, '#14B8A6')}${legSub('Revised genuine shortage', shSerV + shNonV, '#0B3D2E')}</div>`
+      : `<div class="tree">${legSub('In transit', shTransit, '#FCA5A5')}${legSub('Serialized', shSer, '#E5484D')}${legSub('Non-serialized', shNon, '#F59E0B')}</div>`) : '';
     const stockLeg = legRow('Available', T.matched, '#16A34A', '#E7F6ED', '')
       + legRow('Short', T.short, '#E5484D', '#FDECEC', 'short')
       + shortSubs
