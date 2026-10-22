@@ -152,7 +152,7 @@ function storeTop() {
 function shell(page) {
   const staff = isStaff(), cur = resolvePage(page, staff); S.cur = cur;
   const mtabs = staff ? '' : `<nav class="mtabs" id="mtabs"><a href="#/dashboard" data-mt="dashboard"><span class="mt-ic">${ic('home', 20)}</span>Home</a><a href="#/audit" data-mt="audit"><span class="mt-ic">${ic('barcode', 20)}</span>Scan</a><a href="#/audit?tab=non" data-mt="entry"><span class="mt-ic">${ic('clip', 20)}</span>Entry</a><a href="#/result" data-mt="result"><span class="mt-ic">${ic('trend', 20)}</span>Result</a></nav>`;
-  return `<div class="app">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="scrim" id="scrim"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg">${universeLoader()}</div></main>${mtabs}</div></div>`;
+  return `<div class="app${cur === 'ranking' ? ' no-top' : ''}">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="scrim" id="scrim"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg">${universeLoader()}</div></main>${mtabs}</div></div>`;
 }
 function paintMtabs() {
   const m = document.getElementById('mtabs'); if (!m) return;
@@ -184,7 +184,7 @@ function closeFly() { const f = document.getElementById('fly'); if (f) f.classLi
 // Move between pages WITHOUT redrawing the sidebar / top bar: only the content changes (smooth, no flicker).
 function updateShell(cur) {
   S.cur = cur; closeFly();
-  const app0 = document.querySelector('.app'); if (app0) app0.classList.remove('nav-open');
+  const app0 = document.querySelector('.app'); if (app0) { app0.classList.remove('nav-open'); app0.classList.toggle('no-top', cur === 'ranking'); }
   paintMtabs();
   document.querySelectorAll('.sb .nv > a[href]').forEach(x => x.classList.toggle('on', x.getAttribute('href') === '#/' + cur));
   document.querySelectorAll('.sb .nv .grp').forEach(x => x.classList.toggle('on', x.dataset.grp === GROUP_OF[cur]));
