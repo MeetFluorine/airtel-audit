@@ -198,9 +198,104 @@
 .rpc3-stats{grid-template-columns:repeat(5,1fr);gap:4px}
 .rpc3-stats>div{display:flex;flex-direction:column;align-items:center;gap:3px;color:#84958A}
 .rpc3-stats b{font-size:13.5px;color:#123}
-.rpc3-qty{align-items:center;gap:12px}
-.rpc3-qty>span{display:inline-flex;align-items:center;gap:6px}
+.rpc3-qty{align-items:center;gap:9px;flex-wrap:nowrap;white-space:nowrap;font-size:11.5px;overflow:hidden}
+.rpc3-qty>span{display:inline-flex;align-items:center;gap:5px;flex:none}
 .rpc3-qty .q-tr svg{color:#2563EB}
 .rpc3-qty .q-wn svg{color:#D97706}
 .rpc3-qty small{font-size:10.5px;color:#84958A;font-weight:600}
 .rpc3-qty .q-sep{color:#C3CFC9}
+
+/* ---- Store My Ranking redesign (owner spec) ---- */
+.rk-schip{border:1px solid #D5DFDA;background:#fff;padding:5px 11px;border-radius:999px;font-weight:700;font-size:12.5px}
+.rk-lvl{align-items:flex-start}
+.rk-lm{flex:1;min-width:0}
+.rk-lpts{font-size:13px;font-weight:700;color:#12805C;margin-top:2px}
+.rk-lbar{height:7px;border-radius:99px;background:#E4EDE9;overflow:hidden;margin:9px 0 6px}
+.rk-lbar i{display:block;height:100%;border-radius:99px}
+.rk-lmeta{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#5B6B62;flex-wrap:wrap}
+.rk-lnext{font-weight:700;color:#123;display:inline-flex;align-items:center;gap:4px}
+.rk-ltip{font-size:12px;color:#5B6B62;margin-top:6px}
+.rk-rl{display:block;color:#5B6B62;font-size:12px;font-weight:700;margin-top:2px}
+.rk-ric.t{background:#E0F5FA;color:#0E7490}
+.rk-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.rk-kpi2{display:flex;gap:12px;align-items:center;padding:12px 14px}
+.rk-kpi2 small{display:block;color:#5B6B62;font-size:12px;font-weight:600}
+.rk-kv2{font-size:18px;font-weight:800;line-height:1.2}
+.rk-journey{padding:13px 16px;margin-top:12px}
+.rk-jt{display:flex;gap:9px;align-items:baseline;margin-bottom:9px}
+.rk-jrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rk-jarr{color:#B7C4BC;font-weight:800}
+.rk-jchip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1.5px solid #D5DFDA;background:#fff;color:#84958A;font-size:12px;font-weight:700;white-space:nowrap}
+.rk-jchip.done{background:#EFF4F1;border-color:transparent;color:#84958A}
+.rk-jchip.cur{background:var(--jc);border-color:var(--jc);color:#fff}
+.rk-jchip.next{border-color:var(--jc);color:var(--jc)}
+.rk-jchip em{font-style:normal;background:var(--jc);color:#fff;border-radius:99px;padding:1px 6px;font-size:10px}
+.rk-perf{padding:16px;margin-top:12px}
+.rk-twrap{overflow-x:auto}
+.rk-twrap table{min-width:600px}
+@media (max-width:1100px){.rk-kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:640px){
+  .rk-top4{grid-template-columns:1fr 1fr}
+  .rk-lvl{grid-column:1/-1;order:3}
+  .rk-pc{grid-column:1/-1;order:4}
+  .rc-c{order:1}.rc-i{order:2}
+  .rk-kpis{grid-template-columns:1fr 1fr}
+  .rk-jrow{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
+}
+
+/* ---- Store My Ranking: owner mockup match ---- */
+.rk-stxt{font-weight:600;color:#3D4A42;font-size:13px}
+.rk-lvl{padding:18px;gap:16px;align-items:center}
+.rk-lrow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.rk-nchip{display:inline-flex;align-items:center;gap:6px;color:#5B6B62;font-size:12.5px;font-weight:600;white-space:nowrap;padding-top:4px}
+.rk-lname{font-size:27px}
+.rk-lbar{height:10px;margin:10px 0 8px}
+.rk-lbar i{background:linear-gradient(90deg,#F5B301,#F97316)}
+.rk-lmeta{font-size:13px;color:#22312A}
+.rk-lneed{font-weight:600;color:#5B6B62}
+.rk-lneed.ok{color:#12805C}
+.rk-rc2{padding:16px 18px}
+.rk-rrow{display:flex;align-items:center;gap:11px}
+.rk-rl2{color:#5B6B62;font-size:13px;font-weight:600}
+.rk-rc2 .rk-n{font-size:31px;font-weight:800;line-height:1.1;margin-top:9px}
+.rk-ric.rose{background:#FFE4E6;color:#E11D48}
+.rk-ric.peach{background:#FFEDD5;color:#EA580C}
+.rk-kpi2{padding:14px 16px}
+.rk-un{font-size:12px;font-weight:600;color:#84958A}
+.rk-next{gap:16px;padding:16px 18px}
+.rk-segs{display:flex;gap:26px;flex-wrap:wrap;margin-left:auto}
+.rk-seg{display:flex;align-items:center;gap:10px}
+.rk-ring-t{font-size:10px;font-weight:800}
+.rk-sv{font-size:16px;font-weight:800;line-height:1.15}
+.rk-sl{font-size:12.5px;font-weight:600;color:#22312A}
+.rk-sr{font-size:12px;color:#84958A}
+.rk-sr.ok{color:#12805C}
+.rk-sr.no{color:#EA580C}
+@media (max-width:640px){.rk-segs{margin-left:0;gap:16px}.rk-nchip{white-space:normal}}
+
+/* ---- Store My Ranking: layout refinement (spacing/proportions only) ---- */
+.rk-top4{grid-template-columns:1.32fr .96fr .96fr 1.08fr;align-items:stretch}
+.rk-top4>.card{height:100%}
+.rk-lrow{flex-wrap:wrap;row-gap:2px}
+.rk-nchip{padding-top:3px}
+.rk-lname{font-size:26px}
+.rk-lmeta{flex-wrap:nowrap}
+.rk-lmeta>span{min-width:0}
+.rk-lneed{white-space:nowrap}
+.rk-kpi2>div{min-width:0}
+.rk-kv2{white-space:nowrap}
+.rk-pc>div{min-width:0}
+.rk-nm{flex:0 1 290px;min-width:215px}
+.rk-segs{flex:1 1 auto;justify-content:space-between;gap:14px 22px}
+.rk-seg{flex:1 1 172px;min-width:172px}
+.rk-twrap td,.rk-twrap th{white-space:nowrap}
+.rk-jchip{flex:none}
+@media (max-width:1100px){.rk-top4{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){
+  .rk-top4 .rk-lvl{order:1}
+  .rk-top4 .rc-c{order:2}
+  .rk-top4 .rc-i{order:3}
+  .rk-top4 .rk-pc{order:4}
+  .rk-segs{margin-left:0}
+  .rk-seg{flex-basis:calc(50% - 12px);min-width:150px}
+}

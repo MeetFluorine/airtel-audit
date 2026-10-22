@@ -33,11 +33,11 @@ const rkMedal = (lvl, sz = 13) => lvl === 'Champion'
   : `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.1 1.1-6.5L2.6 9.4l6.5-.9z"/></svg>`;
 const rkLvlChip = l => { l = l || 'Unranked'; const c = RK_LVL[l] || RK_LVL.Unranked;
   return `<span class="lvl" style="color:${c};background:${c}1f">${rkMedal(l)} ${l}</span>` };
-const rkHow = () => `<details class="rk-how"><summary>How points, levels and ranks work</summary>
+const rkHow = () => `<details class="rk-how"><summary>How points & levels work</summary>
   <p><b>Seasons.</b> Ranking runs in 3-month seasons (calendar quarters: Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec). Only audit cycles of the season count, so every season starts fresh and a finished season's result never changes.</p>
   <p><b>Points.</b> For every cycle of the season your store <b>completes</b> you earn <b>20 points for taking part</b> plus <b>your match rate</b> (up to 100 points). A cycle you do not complete earns 0.</p>
-  <p><b>In-transit shortage is kept separate.</b> Your audit result still shows every short item as it is. For the ranking, shortage on items whose Inventory_Status is In Transit (already moved out of the store) is shown on its own and is <b>not counted against you</b>: the match rate used for points is your matched stock against the shortage of all <b>other</b> statuses (the "genuine" shortage).</p>
-  <p><b>Levels.</b> Points alone are not enough — a level also needs quality: Bronze ≥ 50% of the season's cycles completed, match ≥ 85%, genuine shortage ≤ 8% · Silver ≥ 65%, ≥ 90%, ≤ 5% · Gold ≥ 80%, ≥ 97%, ≤ 2% · Platinum ≥ 90%, ≥ 98%, ≤ 1.5% · Diamond 100%, ≥ 99%, ≤ 0.5% · Champion 100%, match above 99%, ≤ 0.05% and every audit submitted within its deadline.</p>
+  <p><b>In-transit shortage is shown separately.</b> Your audit result still shows every short item as it is. For the ranking, shortage on items whose Inventory_Status is In Transit (already moved out of the store) is displayed on its own and does not lower your match rate: the match rate used for points is your matched stock measured against the shortage of all <b>other</b> statuses (the "genuine" shortage). Genuine shortage is what affects your performance.</p>
+  <p><b>Levels.</b> Points alone are not enough — a level also needs quality: Bronze ≥ 50% of the season's cycles completed, match ≥ 85%, genuine shortage ≤ 8% · Silver ≥ 65%, ≥ 90%, ≤ 5% · Gold ≥ 80%, ≥ 97%, ≤ 2% · Platinum ≥ 90%, ≥ 98%, ≤ 1.5% · Diamond 100%, ≥ 99%, ≤ 0.5% · Champion 100%, match above 99%, ≤ 0.05% and every audit submitted within its deadline. The points target on the level card is a live benchmark — the lowest points held by any store at the next level this season (estimated from the level criteria when no store holds that level yet). The level itself is always decided by the targets.</p>
   <p><b>Ranks.</b> Your rank is based on total points of the season. If stores have the same points, the one with the <b>lower genuine shortage %</b> ranks higher. Ranks run 1, 2, 3 without gaps: if two stores share rank 1, the next store is rank 2. Circles are ranked on the <b>average points per store</b>, so big and small circles compare fairly.</p></details>`;
 
 PAGES.ranking = async el => {
@@ -49,31 +49,75 @@ PAGES.ranking = async el => {
   const lvl = d.level || 'Unranked', lc = RK_LVL[lvl], none = !d.cycles_done;
   const li = RK_LEVELS.indexOf(lvl), next = li >= 0 && li < RK_LEVELS.length - 1 ? RK_LEVELS[li + 1] : null;
   const comp = d.cycles_held ? Math.round(1000 * d.cycles_done / d.cycles_held) / 10 : 0;
-  const medallion = `<span class="rk-medal" style="color:${lc};background:${lc}1f;border-color:${lc}55">${rkMedal(lvl, 30)}</span>`;
-  const rankCard = (icon, t, n, tot, sub) => `<div class="card rk-rc"><span class="rk-ric">${icon}</span><div><small>${t}</small><div class="rk-n">${none ? '—' : '#' + n}</div><div class="rk-sub">${none ? 'Complete your first audit of the season to get ranked' : sub + (tot ? ` · of ${tot}` : '')}</div></div></div>`;
+  const cpct = rkCpct(d);
+  // Rosette medal (owner mockup): scalloped badge + ribbons, centre glyph by level.
+  const glyphFor = L => L === 'Champion'
+    ? '<path d="M16.8 27.2 15.7 19.8l4.2 2.8 4.1-5.2 4.1 5.2 4.2-2.8-1.1 7.4z M17 29.4h14" stroke="#fff" stroke-width="1.7" fill="#fff" stroke-linejoin="round"/>'
+    : (L === 'Diamond' || L === 'Platinum')
+    ? '<path d="M19.5 19.5h19L24 31z M19.5 19.5 22 15h14l2.5 4.5 M22 15l3.2 12 M36 15l-3.2 12" stroke="#fff" stroke-width="1.6" fill="none" stroke-linejoin="round"/>'
+    : '<path d="M24 16.2l2.3 4.9 5.4.7-3.9 3.7 1 5.3L24 28.2l-4.8 2.6 1-5.3-3.9-3.7 5.4-.7z" fill="#fff"/>';
+  const rkRosette = (color, L, size) => { const pts = []; for (let i = 0; i < 24; i++) { const r = i % 2 ? 16.8 : 20.5, a = Math.PI * i / 12 - Math.PI / 2; pts.push((24 + r * Math.cos(a)).toFixed(1) + ',' + (21 + r * Math.sin(a)).toFixed(1)); }
+    return `<svg width="${size}" height="${Math.round(size * 52 / 48)}" viewBox="0 0 48 52" aria-hidden="true"><path d="M15.5 34 11.5 49l7.8-4.4L24 49.5l4.7-4.9L36.5 49 32.5 34z" fill="${color}" opacity=".45"/><polygon points="${pts.join(' ')}" fill="${color}"/><circle cx="24" cy="21" r="13" fill="${color}" stroke="#ffffff59" stroke-width="1.4"/>${glyphFor(L)}</svg>`; };
+  // Points benchmark for the next level: the lowest points held by any store at that
+  // level this season (server: level_points). If no store holds it yet, estimate the
+  // target from the level criteria: cycles held x (20 + the gate's match %).
+  const lp = d.level_points || {};
+  let bench = null;
+  if (next) bench = lp[next] != null ? { target: Number(lp[next]), est: false } : { target: Math.round(d.cycles_held * (20 + RK_GATES[next].match)), est: true };
+  const bPct = bench && bench.target > 0 ? Math.min(100, Math.round(1000 * Number(d.points || 0) / bench.target) / 10) : 0;
+  const bLeft = bench ? bench.target - Number(d.points || 0) : 0;
+  const benchMeta = !bench || bench.target <= 0
+    ? `<span><b>${rkPts(d.points)}</b> <span class="muted">points this season</span></span><span></span>`
+    : `<span><b>${rkPts(d.points)}</b> <span class="muted">/ ${rkPts(bench.target)}${bench.est ? ' (estimated target)' : ''}</span></span><span class="rk-lneed${bLeft > 0 ? '' : ' ok'}">${bLeft > 0 ? rkPts(bLeft) + ' points needed' : 'Benchmark reached ✓'}</span>`;
+  const lvlCard = next ? `<div class="card rk-lvl">${rkRosette(lc, lvl, 62)}<div class="rk-lm"><div class="rk-lrow"><div><small>Your Level</small><div class="rk-lname" style="color:${lc}">${lvl}</div></div>
+      <span class="rk-nchip">${rkRosette('#9AA7B1', next, 20)} Next Level: ${next}</span></div>
+      <div class="bar2 rk-lbar"><i style="width:${bPct}%"></i></div>
+      <div class="rk-lmeta">${benchMeta}</div></div></div>`
+    : `<div class="card rk-lvl">${rkRosette(lc, lvl, 62)}<div class="rk-lm"><div class="rk-lrow"><div><small>Your Level</small><div class="rk-lname" style="color:${lc}">${lvl}</div></div>
+      <span class="rk-nchip">🏆 Highest Tier</span></div>
+      <div class="bar2 rk-lbar"><i style="width:100%"></i></div>
+      <div class="rk-lmeta"><span><b>${rkPts(d.points)}</b> <span class="muted">points this season</span></span><span class="rk-lneed ok">Highest level reached</span></div></div></div>`;
+  const icoCrown = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 17 2.4 8.5 7.5 12 12 5.8 16.5 12l5.1-3.5L20.5 17z"/><path d="M4 20.5h16"/></svg>';
+  const icoBars = '<svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3.5" y="12.5" width="4.6" height="7.5" rx="1.2"/><rect x="9.7" y="8" width="4.6" height="12" rx="1.2"/><rect x="15.9" y="3.5" width="4.6" height="16.5" rx="1.2"/></svg>';
+  const rankCard = (cls, icon, label, n, sub) => `<div class="card rk-rc2 ${cls}"><div class="rk-rrow"><span class="rk-ric">${icon}</span><small class="rk-rl2">${label}</small></div><div class="rk-n">${none ? '—' : '#' + n}</div><div class="rk-sub">${none ? 'Complete your first audit to get ranked' : sub}</div></div>`;
   const C = 2 * Math.PI * 26, off = C * (1 - (d.cycles_held ? d.cycles_done / d.cycles_held : 0));
   const donut = `<svg class="rk-donut" width="72" height="72" viewBox="0 0 72 72"><circle cx="36" cy="36" r="26" fill="none" stroke="#E4EDE9" stroke-width="7"/><circle cx="36" cy="36" r="26" fill="none" stroke="#16A34A" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 36 36)"/><text x="36" y="34" text-anchor="middle" class="rk-dn">${d.cycles_done} / ${d.cycles_held}</text><text x="36" y="48" text-anchor="middle" class="rk-ds">Cycles</text></svg>`;
-  // Next-level card: the three gates (plus on-time for Champion), each with current vs required.
-  const gate = (label, nowTxt, ok, reqTxt) => `<div class="rk-gate"><span class="rk-gic ${ok ? 'ok' : 'no'}">${ok ? '✓' : '!'}</span><div class="rk-gm"><b>${nowTxt}</b><span>${label}</span></div><span class="rk-greq ${ok ? 'ok' : ''}">${reqTxt}</span></div>`;
+  // KPI row (icon tile + label + value; shortage types stay separate, in units).
+  const kIco = (inner, col) => `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  const kpi = (cls, icon, label, val, vstyle) => `<div class="card rk-kpi2"><span class="rk-ric ${cls}">${icon}</span><div><small>${label}</small><div class="rk-kv2"${vstyle ? ` style="${vstyle}"` : ''}>${val}</div></div></div>`;
+  const kpis = `<div class="rk-kpis">
+    ${kpi('t', kIco('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15.5l2 2 4-4"/>', '#0E7490'), 'Cycles Completed', `${d.cycles_done} / ${d.cycles_held}`)}
+    ${kpi('rose', kIco('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="#E11D48"/>', '#E11D48'), 'Match Rate', rkPct2(d.match_rate))}
+    ${kpi('peach', kIco('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8v.2"/>', '#EA580C'), 'Genuine Shortage', rkPts(d.short_other) + ' <small class="rk-un">units</small>', 'color:#EA580C')}
+    ${kpi('b', kIco('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>', '#2563EB'), 'In Transit', rkPts(d.short_transit) + ' <small class="rk-un">units</small>')}</div>`;
+  // Level journey: every level, current highlighted, next emphasized.
+  const journey = `<div class="card rk-journey"><div class="rk-jt"><b>Level Journey</b><span class="muted">This season</span></div><div class="rk-jrow">${RK_LEVELS.map((L, i) => {
+    const st = i < li ? 'done' : i === li ? 'cur' : i === li + 1 ? 'next' : 'todo', col = RK_LVL[L];
+    return `${i ? '<span class="rk-jarr">→</span>' : ''}<span class="rk-jchip ${st}" ${st === 'cur' || st === 'next' ? `style="--jc:${col}"` : ''}>${rkMedal(L, 12)} ${L}${st === 'cur' ? ' ✓' : ''}${st === 'next' ? '<em>Next</em>' : ''}</span>`; }).join('')}</div></div>`;
+  // Next-level card (mockup): grey rosette + title/points line, gate rings on the right.
+  const ring = (pct, ok, center) => { const r = 19, cc = 2 * Math.PI * r, f = pct == null ? cc : cc * Math.max(0, Math.min(100, pct)) / 100;
+    return `<svg width="46" height="46" viewBox="0 0 46 46"><circle cx="23" cy="23" r="${r}" fill="none" stroke="#E7EEEA" stroke-width="4"/><circle cx="23" cy="23" r="${r}" fill="none" stroke="${ok === false ? '#F59E0B' : '#16A34A'}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${cc.toFixed(1)}" stroke-dashoffset="${(cc - f).toFixed(1)}" transform="rotate(-90 23 23)"/><text x="23" y="27.5" text-anchor="middle" class="rk-ring-t" fill="${ok === false ? '#EA580C' : '#12805C'}">${center}</text></svg>`; };
+  const seg = (ringHtml, val, valOk, label, req, reqOk) => `<div class="rk-seg">${ringHtml}<div><div class="rk-sv" ${valOk == null ? '' : `style="color:${valOk ? '#12805C' : '#C2410C'}"`}>${val}</div><div class="rk-sl">${label}</div><div class="rk-sr ${reqOk ? 'ok' : 'no'}">${req}</div></div></div>`;
   let nextCard;
-  if (!next) nextCard = `<div class="card rk-next"><span class="rk-medal" style="color:${lc};background:${lc}1f;border-color:${lc}55">${rkMedal('Champion', 30)}</span><div class="rk-nm"><b>Top level: Champion 🏆</b><span>You hold the highest level this season. Defend it next season.</span></div></div>`;
+  if (!next) nextCard = `<div class="card rk-next">${rkRosette(lc, 'Champion', 52)}<div class="rk-nm"><b>🏆 Champion — Highest Tier</b><span>You hold the highest level this season. Defend it next season.</span></div></div>`;
   else { const g = RK_GATES[next];
-    nextCard = `<div class="card rk-next"><span class="rk-medal" style="color:${RK_LVL[next]};background:${RK_LVL[next]}1f;border-color:${RK_LVL[next]}55">${rkMedal(next, 30)}</span>
-      <div class="rk-nm"><b>Next Level: ${next}</b><span>Complete more cycles and improve your performance to reach ${next}.</span></div>
-      <div class="rk-gates">${gate('Cycle Completion', comp + '%', d.cycles_held > 0 && comp >= g.comp, `≥ ${g.comp}% required`)}
-      ${gate('Match Rate', rkPct2(d.match_rate), d.match_rate != null && (g.matchGt ? d.match_rate > g.match : d.match_rate >= g.match), `${g.matchGt ? '&gt;' : '≥'} ${g.match}% required`)}
-      ${gate('Genuine Shortage', rkPct(rkCpct(d)), rkCpct(d) != null && rkCpct(d) <= g.short, `≤ ${g.short}% required`)}
-      ${g.ontime ? gate('On-time Submission', d.late_count ? d.late_count + ' late' : 'All on time', !d.late_count, 'Every audit within its deadline') : ''}</div></div>`; }
+    const cOk = d.cycles_held > 0 && comp >= g.comp, mOk = d.match_rate != null && (g.matchGt ? d.match_rate > g.match : d.match_rate >= g.match), sOk = cpct != null && cpct <= g.short;
+    const sub = bench && bench.target > 0 && bLeft > 0 ? `You need ${rkPts(bLeft)} more points to reach ${next}.` : bench && bench.target > 0 ? `Points benchmark reached — meet the targets on the right to reach ${next}.` : `Meet the targets on the right to reach ${next}.`;
+    nextCard = `<div class="card rk-next">${rkRosette('#9AA7B1', next, 52)}<div class="rk-nm"><b>Next Level: ${next}</b><span>${sub}</span></div>
+      <div class="rk-segs">${seg(ring(comp, cOk, comp + '%'), comp + '%', null, 'Cycle Completion', `≥ ${g.comp}% required`, cOk)}
+      ${seg(ring(100, mOk, mOk ? '✓' : '!'), rkPct2(d.match_rate), mOk, 'Match Rate', `${g.matchGt ? '&gt;' : '≥'} ${g.match}% required`, mOk)}
+      ${seg(ring(100, sOk, sOk ? '✓' : '!'), rkPct(cpct), sOk, 'Genuine Shortage', `≤ ${g.short}% required`, sOk)}
+      ${g.ontime ? seg(ring(100, !d.late_count, !d.late_count ? '✓' : '!'), d.late_count ? d.late_count + ' late' : 'All on time', !d.late_count, 'On-time Submission', 'Every audit within its deadline', !d.late_count) : ''}</div></div>`; }
+  const nCyc = d.cycles.length;
   el.innerHTML = `<div class="pagehead"><div><h1>My Ranking</h1><p class="muted" style="margin:4px 0 0">${esc(d.store)} · ${esc(d.circle)} Circle</p></div>
-    <div class="rk-stag"><span class="livepill"><i></i>Live Season</span><span class="rk-slab">${cur.label}</span><span class="muted">| ${d.cycles_held} cycle${d.cycles_held === 1 ? '' : 's'} so far</span></div></div>
-    <div class="rk-top4"><div class="card rk-lvl">${medallion}<div><small>Your Level</small><div class="rk-lname" style="color:${lc}">${lvl}</div>
-      <span class="rk-lpill">${next ? (lvl === 'Unranked' ? `Complete audits to earn ${next}` : `Keep improving to reach ${next}`) : 'Highest level reached'}</span></div></div>
-    ${rankCard(rkMedal('Champion', 20), 'Rank in Your Circle', d.circle_rank, d.circle_total, esc(d.circle) + ' Circle')}
-    ${rankCard('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.3"/><rect x="9.5" y="8" width="5" height="13" rx="1.3"/><rect x="16" y="3" width="5" height="18" rx="1.3"/></svg>', 'Rank in India', d.pan_rank, d.pan_total, 'All stores')}
+    <div class="rk-stag"><span class="livepill"><i></i>Live Season</span><span class="rk-stxt">${cur.label} | ${d.cycles_held} cycle${d.cycles_held === 1 ? '' : 's'}</span></div></div>
+    <div class="rk-top4">${lvlCard}
+    ${rankCard('rc-c', icoCrown, 'Circle Rank', d.circle_rank, esc(d.circle) + ' Circle · of ' + d.circle_total)}
+    ${rankCard('rc-i', icoBars, 'India Rank', d.pan_rank, 'All stores · of ' + d.pan_total)}
     <div class="card rk-pc">${donut}<div><small>Season Progress</small><div class="rk-pn">${comp}% completed</div><div class="bar2 rk-pbar"><i style="width:${comp}%"></i></div><div class="rk-sub">${d.cycles_held ? (d.cycles_held - d.cycles_done) + ' cycle' + (d.cycles_held - d.cycles_done === 1 ? '' : 's') + ' remaining' : 'No cycles yet this season'}</div></div></div></div>
-    <div class="kv kpi"><div class="g"><span>Total Points (This Season)</span><b>${rkPts(d.points)}</b></div><div><span>Match Rate</span><b>${rkPct2(d.match_rate)}</b></div><div class="${rkCpct(d) > 0 ? 'a' : ''}"><span>Genuine Shortage %</span><b>${rkPct(rkCpct(d))}</b></div><div><span>In Transit <small>(not counted)</small></span><b>${rkPts(d.short_transit)}</b></div><div class="${d.short_other > 0 ? 'a' : ''}"><span>Other Status <small>(counted)</small></span><b>${rkPts(d.short_other)}</b></div></div>
-    <div class="card" style="padding:18px;margin-top:6px"><b>Audit Performance (This Season)</b>${d.cycles.length ? tbl(['Audit cycle', 'Status', 'Short (all)', 'In transit', 'Other status', 'Match rate (for points)', 'Points'], d.cycles.map(c => `<tr><td>${esc(c.name)}${c.status === 'ACTIVE' ? ' ' + badge('Open', 'info') : ''}</td><td>${c.done ? badge('Completed', 'ok') : badge('Not completed', 'bad')}</td>
-      <td>${c.done ? rkPts(c.short) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td><b>${rkPts(c.points)}</b></td></tr>`).join('')) : '<p class="muted">No audit cycle yet this season.</p>'}</div>${nextCard}${rkHow()}`;
+    ${kpis}${journey}
+    <div class="card rk-perf"><b>Season Performance</b><div class="rk-twrap">${nCyc ? tbl(['Audit Cycle', 'Status', 'Cycle', 'Match Rate', 'Genuine Shortage', 'In Transit', 'Points'], d.cycles.map((c, ix) => `<tr><td>${esc(c.name)}${c.status === 'ACTIVE' ? ' ' + badge('Open', 'info') : ''}</td><td>${c.done ? badge('Completed', 'ok') : badge('Not completed', 'bad')}</td>
+      <td>${nCyc - ix} / ${nCyc}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td><b>${rkPts(c.points)}</b></td></tr>`).join('')) : '<p class="muted">No audit cycle yet this season.</p>'}</div></div>${nextCard}${rkHow()}`;
 };
 
 // ---- a table over already-loaded rows: click a heading to sort (A to Z / Z to A, low to high / high to low). No filters. ----
@@ -120,18 +164,18 @@ async function rankStaff(el) {
   // Pan-India Top 3 (admin only): wide cards with level chips + season stats (design module, Oct 2026)
   const crown = r => `<svg class="crown c${r}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.8 7.2 7.2 10.8l4.8-6 4.8 6 4.4-3.6-2 10.8H4.8z"/><rect x="4.8" y="19" width="14.4" height="2" rx="1"/></svg>`;
   // Top-3 stat icons (metrics are icon + value only, no text labels - owner design)
-  const ti = (inner) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
-  const TI = { flag: ti('<path d="M5 21V4"/><path d="M5 4h12.5l-2.5 4 2.5 4H5"/>'),
-    users: ti('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 15.2c2.3.2 3.9 1.6 4.4 4.3"/>'),
-    cal: ti('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15.5l2 2 4-4"/>'),
-    bars: ti('<path d="M4 20V12M10 20V5M16 20v-8M21 20H3"/>'),
-    warn: ti('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8v.2"/>'),
-    truck: ti('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>') };
+  const ti = (inner, col) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${col || '#2563EB'}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+  const TI = { flag: `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21.5v-17" stroke="#64748B" stroke-width="2" stroke-linecap="round"/><rect x="4" y="4.5" width="17" height="4.6" fill="#F4901E"/><rect x="4" y="9.1" width="17" height="4.6" fill="#FFFFFF" stroke="#E2E8F0" stroke-width=".6"/><rect x="4" y="13.7" width="17" height="4.6" fill="#138808"/><circle cx="12.5" cy="11.4" r="1.5" fill="none" stroke="#2B4C9B" stroke-width="1"/></svg>`,
+    users: ti('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 15.2c2.3.2 3.9 1.6 4.4 4.3"/>', '#2563EB'),
+    cal: ti('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15.5l2 2 4-4"/>', '#0E7490'),
+    bars: ti('<path d="M4 20V12M10 20V5M16 20v-8M21 20H3"/>', '#2563EB'),
+    warn: ti('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8v.2"/>', '#DC2626'),
+    truck: ti('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>', '#2563EB') };
   const topCard3 = (s, r) => `<div class="rpc3 w${r}">${crown(r)}<div class="rpc3-main"><span class="rkmedal m${r}">${r}</span>
     <div class="rpc3-store"><b>${esc(s.code)}</b><span>${esc(s.name)} (${esc(s.circle)})</span><span>${rkLvlChip(s.level)}</span></div>
     <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>
     <div class="rpc3-stats"><div title="India rank">${TI.flag}<b>#${s.pan_rank}</b></div><div title="Circle rank">${TI.users}<b>#${s.circle_rank}</b></div><div title="Cycles completed">${TI.cal}<b>${s.cycles_done}/${s.cycles_held}</b></div><div title="Match rate">${TI.bars}<b>${rkPct2(s.match_rate)}</b></div><div title="Genuine shortage %">${TI.warn}<b>${rkPct(rkCpct(s))}</b></div></div>
-    <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b> <small>(not counted)</small></span><span class="q-sep">|</span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
+    <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b></span><span class="q-sep">|</span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
   const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
   const SC = [
     { k: 'pan_rank', w: 6, l: '# (India)', t: 'num', get: s => s.pan_rank, cell: s => ranked(s) ? `<b>${s.pan_rank}</b>` : '—' },
