@@ -42,6 +42,9 @@
 .rv-acc{width:96px}
 .rv-acc input{width:100%;height:32px;border:1px solid #D3DEDA;border-radius:8px;padding:0 8px;font:13px Inter,system-ui,sans-serif}
 .rv-acc input:focus{outline:0;border-color:#E5B800;box-shadow:0 0 0 3px #FFEBA8}
+.btn.rej{background:#fff;color:#B42318;border:1px solid #F4B4B4}
+.btn.rej:hover{background:#FDECEC}
+.btn.rej:disabled,.btn.yel:disabled{opacity:.45;cursor:default}
 .rv-detail{font-size:12.5px;color:#44564F;padding:8px 10px;background:#F8FAF9;border-radius:8px;margin-top:8px}
 .rv-detail summary{cursor:pointer;font-weight:600;color:#0B3D2E}
 .rv-detail table{margin-top:8px}

@@ -22,8 +22,8 @@ PAGES.review = async el => {
       <td>${e.item_sno ? esc(e.item_sno) : 'Qty ' + fn(e.qty)}</td>
       <td>${esc(e.reference || '—')}</td><td>${esc(e.remark || '—')}</td>
       <td>${e.status === 'REVIEWED' ? (Number(e.accepted_qty) > 0 ? '<span class="rchip acc">Accepted</span>' : '<span class="rchip rej">Not accepted</span>') : '<span class="rchip pen">Pending</span>'}</td>
-      <td class="rv-acc"><input type="number" min="0" step="any" max="${e.qty}" value="${e.accepted_qty != null ? e.accepted_qty : e.qty}" data-eacc="${e.id}"></td>
-      <td><button type="button" class="btn sm yel" data-esave="${e.id}">Save</button></td></tr>`).join('')}</tbody></table>`;
+      <td class="rv-acc">${e.is_serialized ? `<span>${fn(e.qty)}</span>` : `<input type="number" min="0" step="any" max="${e.qty}" value="${e.accepted_qty != null ? e.accepted_qty : e.qty}" data-eacc="${e.id}" data-max="${e.qty}">`}</td>
+      <td style="white-space:nowrap"><button type="button" class="btn sm yel" data-esave="${e.id}" data-eqty="${e.qty}">Accept</button> <button type="button" class="btn sm rej" data-erej="${e.id}">Reject</button></td></tr>`).join('')}</tbody></table>`;
   }
 
   function render() {
@@ -33,11 +33,11 @@ PAGES.review = async el => {
         <span class="rv-nums"><span>Reported <b class="r">${fn(s.reported)}</b></span><span>Claimed <b>${fn(s.claimed)}</b></span><span>Accepted <b class="g">${fn(s.accepted)}</b></span><span>Revised <b>${fn(s.revised)}</b></span></span></button>
       ${open.has(s.session_id) ? `<div class="rv-body">${s.groups.length ? `<table class="tbl"><thead><tr><th>Remark</th><th>Entries</th><th>Claimed</th><th>Accepted</th><th></th><th></th></tr></thead><tbody>${s.groups.map(g => `<tr>
           <td><b>${esc(g.category)}</b>${g.pending ? ` <span class="rchip pen">${g.pending} pending</span>` : ''}</td><td>${g.entries}</td><td>${fn(g.claimed)}</td>
-          <td class="rv-acc"><input type="number" min="0" step="any" max="${g.claimed}" value="${g.pending === g.entries ? g.claimed : g.accepted}" data-gacc="${s.session_id}|${g.category_id || ''}"></td>
-          <td><button type="button" class="btn sm yel" data-gsave="${s.session_id}" data-cat="${g.category_id || ''}">Save</button></td>
+          <td class="rv-acc"><input type="number" min="0" step="any" max="${g.claimed}" value="${g.pending === g.entries ? g.claimed : g.accepted}" data-gacc="${s.session_id}|${g.category_id || ''}" data-max="${g.claimed}"></td>
+          <td style="white-space:nowrap"><button type="button" class="btn sm yel" data-gsave="${s.session_id}" data-cat="${g.category_id || ''}">Accept</button> <button type="button" class="btn sm rej" data-grej="${s.session_id}" data-cat="${g.category_id || ''}">Reject</button></td>
           <td><button type="button" class="btn sm" data-entries="${s.session_id}" data-cat="${g.category_id || ''}">${entOpen.has(gkey(s.session_id, g.category_id)) ? 'Hide entries' : 'View entries'}</button></td></tr>
           ${entOpen.has(gkey(s.session_id, g.category_id)) ? `<tr><td colspan="6">${entriesHtml(s.session_id, g.category_id)}</td></tr>` : ''}`).join('')}</tbody></table>
-        <p class="muted" style="font-size:12px;margin:10px 0 0">Set the accepted quantity per remark and Save — the rest stays as genuine shortage. Use View entries to accept item by item.</p>` : '<p class="muted" style="padding:8px 2px">No remarks from this store yet — its genuine shortage stands as reported.</p>'}</div>` : ''}
+        <p class="muted" style="font-size:12px;margin:10px 0 0">Set the accepted quantity per remark — the button reads <b>Accept</b> at the full claimed quantity, <b>Partially accept</b> below it; <b>Reject</b> keeps the whole quantity as genuine shortage. Use View entries to accept or reject item by item (serial-wise).</p>` : '<p class="muted" style="padding:8px 2px">No remarks from this store yet — its genuine shortage stands as reported.</p>'}</div>` : ''}
     </div>`).join('') : '<div class="card" style="padding:18px"><p class="muted" style="margin:0">No store has genuine shortage in this cycle yet.</p></div>';
     const catCard = admin ? `<div class="card" style="padding:16px;margin-top:16px"><div class="cardhead"><b>Remark categories</b><span class="muted">Stores pick from this list when explaining a shortage. Deactivated categories stay on old remarks but cannot be picked again.</span></div>
       <table class="tbl"><thead><tr><th>Category</th><th>Reference label</th><th>Ref. required</th><th>Order</th><th>Active</th><th></th></tr></thead><tbody>
@@ -64,7 +64,10 @@ PAGES.review = async el => {
   }
 
   function wire() {
+    const paint = (b, v, max) => { if (!b) return; b.textContent = v >= max ? 'Accept' : v > 0 ? 'Partially accept' : 'Accept'; b.disabled = v <= 0; };
     el.querySelectorAll('[data-open]').forEach(b => b.onclick = () => { const id = b.dataset.open; if (open.has(id)) open.delete(id); else open.add(id); render(); });
+    el.querySelectorAll('[data-gacc]').forEach(inp => { const b = inp.closest('tr').querySelector('[data-gsave]'); const f = () => paint(b, Number(inp.value) || 0, Number(inp.dataset.max) || 0); inp.oninput = f; f(); });
+    el.querySelectorAll('[data-eacc]').forEach(inp => { const b = inp.closest('tr').querySelector('[data-esave]'); const f = () => paint(b, Number(inp.value) || 0, Number(inp.dataset.max) || 0); inp.oninput = f; f(); });
     el.querySelectorAll('[data-gsave]').forEach(b => b.onclick = async () => {
       const sid = b.dataset.gsave, cat = b.dataset.cat || null;
       const inp = el.querySelector(`[data-gacc="${sid}|${cat || ''}"]`);
@@ -74,6 +77,13 @@ PAGES.review = async el => {
       b.disabled = false;
       if (error) { toast(rpcMsg(error), 'err'); return; }
       toast('Revision saved — shortage and ranking updated.', 'ok'); refresh();
+    });
+    el.querySelectorAll('[data-grej]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const { error } = await sb.rpc('review_remark_group', { p_session: b.dataset.grej, p_category: b.dataset.cat || null, p_accepted_total: 0 });
+      b.disabled = false;
+      if (error) { toast(rpcMsg(error), 'err'); return; }
+      toast('Rejected — that quantity stays as genuine shortage.', 'ok'); refresh();
     });
     el.querySelectorAll('[data-entries]').forEach(b => b.onclick = async () => {
       const sid = b.dataset.entries, cat = b.dataset.cat || null, k = gkey(sid, cat);
@@ -85,12 +95,19 @@ PAGES.review = async el => {
     });
     el.querySelectorAll('[data-esave]').forEach(b => b.onclick = async () => {
       const inp = el.querySelector(`[data-eacc="${b.dataset.esave}"]`);
-      const val = inp ? Number(inp.value) : 0;
+      const val = inp ? Number(inp.value) : Number(b.dataset.eqty);
       b.disabled = true;
       const { error } = await sb.rpc('review_remark_entry', { p_remark: b.dataset.esave, p_accepted_qty: isNaN(val) ? 0 : val });
       b.disabled = false;
       if (error) { toast(rpcMsg(error), 'err'); return; }
       toast('Saved — shortage and ranking updated.', 'ok'); refresh();
+    });
+    el.querySelectorAll('[data-erej]').forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      const { error } = await sb.rpc('review_remark_entry', { p_remark: b.dataset.erej, p_accepted_qty: 0 });
+      b.disabled = false;
+      if (error) { toast(rpcMsg(error), 'err'); return; }
+      toast('Rejected — that item stays as genuine shortage.', 'ok'); refresh();
     });
     const add = el.querySelector('#nc-add');
     if (add) add.onclick = async () => {
