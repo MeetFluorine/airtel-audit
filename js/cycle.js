@@ -11,12 +11,14 @@ async function loadCycles() {
   applyCycle(id);
 }
 function applyCycle(id) {
-  S.cycleId = id; const c = S.cycles.find(x => x.id === id); S.cycleName = c ? c.name : ''; S.cycleDeadline = c ? c.deadline_at : null; S.progress = null;
+  S.cycleId = id; const c = S.cycles.find(x => x.id === id); S.cycleName = c ? c.name : ''; S.cycleDeadline = c ? c.deadline_at : null; S.cycleStatus = c ? c.status : null; S.progress = null;
   if (id) sessionStorage.setItem('sfx_cycle', id); else sessionStorage.removeItem('sfx_cycle');
 }
 // Days left until the cycle deadline (3 days from creation). Negative = overdue.
 function deadlineDays() { return S.cycleDeadline == null ? null : Math.ceil((new Date(S.cycleDeadline) - Date.now()) / 864e5); }
 function deadlineChip() {
+  // A closed cycle is never overdue: the deadline only applies while the cycle is open.
+  if (S.cycleStatus && S.cycleStatus !== 'ACTIVE') return '<div class="conn">Cycle closed</div>';
   const d = deadlineDays(); if (d == null) return '';
   const dstr = new Date(S.cycleDeadline).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   if (d < 0) return `<div class="conn" style="color:#ff6b6b;font-weight:700">Overdue by ${-d} day${-d === 1 ? '' : 's'}</div>`;
@@ -28,7 +30,7 @@ function cycleWidgetHtml() {
   return `<div class="cyc"><div class="lbl">AUDIT CYCLE</div>
     ${has ? `<select id="cyc-sel">${S.cycles.map(c => `<option value="${c.id}" ${c.id === S.cycleId ? 'selected' : ''}>${esc(c.name)}${c.status === 'ACTIVE' ? '' : ' (closed)'}</option>`).join('')}</select>` : '<div style="font-size:13px;color:#B7D4C6">No audit cycle yet.</div>'}
     <div class="two" ${admin ? '' : 'style="grid-template-columns:1fr"'}>${has ? '<button class="btn" id="cyc-load">Load</button>' : ''}${admin ? `<button class="btn new" id="cyc-new">+ New</button>` : ''}</div>
-    ${admin && has ? '<div class="rowb"><button class="btn clo" id="cyc-close">Close cycle</button><button class="btn del" id="cyc-del">Delete cycle</button></div>' : ''}
+    ${admin && has ? '<div class="rowb"><button class="btn clo" id="cyc-close">Close cycle</button><button class="btn del" id="cyc-del">Delete cycle</button></div><button class="btn reo" id="cyc-reopen">Reopen cycle</button>' : ''}
     ${S.cycleId ? `<div class="conn">Connected to “${esc(S.cycleName)}”</div>${deadlineChip()}<div class="prog"><span>Audit progress</span><b id="cp-pct">…</b></div><div class="bar2"><i id="cp-bar" style="width:0%"></i></div><small id="cp-txt">Loading…</small>` : ''}</div>`;
 }
 async function refreshProgress() {
@@ -37,7 +39,7 @@ async function refreshProgress() {
   const pct = data && data.total ? Math.round(100 * data.completed / data.total) : 0; S.progress = data;
   const a = document.getElementById('cp-pct'), b = document.getElementById('cp-bar'), c = document.getElementById('cp-txt');
   if (a) a.textContent = pct + '%'; if (b) b.style.width = pct + '%';
-  if (c) c.textContent = data ? `${data.completed} / ${data.total} stores completed${data.overdue ? ` · ${data.overdue} overdue` : ''}` : '';
+  if (c) c.textContent = data ? `${data.completed} / ${data.total} stores completed${data.overdue && (!S.cycleStatus || S.cycleStatus === 'ACTIVE') ? ` · ${data.overdue} overdue` : ''}` : '';
 }
 async function purgeCycleFiles(cycleId) {   // original Excel backups of the cycle's base stock
   try {
@@ -62,11 +64,24 @@ function wireCycle() {
     if (c.status !== 'ACTIVE') { toast('This cycle is already closed.', 'err'); return; }
     const o = openModal('Close this audit cycle?', `<p>You are about to close <b>${esc(c.name)}</b>.</p>
       <p>Store users will no longer be able to start or continue audits in it. Audits already submitted, and all base stock, results and logs, stay exactly as they are and remain viewable.</p>
-      <p class="muted">A closed cycle cannot be reopened from the app. Creating a new cycle later does not affect it.</p><label class="chk"><input type="checkbox" id="m_ok"> I understand store users can no longer audit in this cycle.</label>`,
+      <p class="muted">You can reopen it later from here if changes are needed. Creating a new cycle later does not affect it.</p><label class="chk"><input type="checkbox" id="m_ok"> I understand store users can no longer audit in this cycle.</label>`,
       [cancelBtn, { label: 'Close cycle', cls: 'danger', fn: async () => { const { data, error } = await sb.rpc('admin_close_cycle', { p_cycle: id }); if (error) throw error;
         await loadCycles(); applyCycle(id);
         toast(data && data.audits_in_progress ? `Closed ${data.name}. ${data.audits_in_progress} store audit(s) were still in progress.` : `Closed ${(data && data.name) || c.name}.`, 'ok'); S.shellUser = null; route(); } }]);
     const go = o.querySelector('.ma .danger'); go.disabled = true; o.querySelector('#m_ok').onchange = e => (go.disabled = !e.target.checked); };
+  // Reopen: admin can reopen a closed cycle for corrections. It becomes ACTIVE again with a fresh 3-day deadline.
+  const syncReopen = () => { const b = $('cyc-reopen'), sel = $('cyc-sel'); if (!b || !sel) return; const c = S.cycles.find(x => x.id === sel.value), closed = !!c && c.status !== 'ACTIVE';
+    b.disabled = !closed; b.title = closed ? 'Reopen this audit cycle' : 'This cycle is already open'; };
+  if ($('cyc-sel')) { $('cyc-sel').addEventListener('change', syncReopen); syncReopen(); }
+  if ($('cyc-reopen')) $('cyc-reopen').onclick = () => { const id = $('cyc-sel').value, c = S.cycles.find(x => x.id === id); if (!c) return;
+    if (c.status === 'ACTIVE') { toast('This cycle is already open.', 'err'); return; }
+    const dl = new Date(Date.now() + 3 * 864e5).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    openModal('Reopen this audit cycle?', `<p>You are about to reopen <b>${esc(c.name)}</b>.</p>
+      <p>Store users will be able to start and continue audits in it again, and base data can be changed by the usual roles. All existing audits, base stock, results and logs stay exactly as they are.</p>
+      <p class="muted">Stores get a <b>fresh 3 days</b> from now — the new deadline will be <b>${dl}</b>. Without this, the cycle would auto-close again straight away, because its old deadline has already passed.</p>`,
+      [cancelBtn, { label: 'Reopen cycle', cls: 'primary', fn: async () => { const { data, error } = await sb.rpc('admin_reopen_cycle', { p_cycle: id }); if (error) throw error;
+        await loadCycles(); applyCycle(id);
+        toast(`Reopened ${(data && data.name) || c.name}. Stores have 3 days from now.`, 'ok'); S.shellUser = null; route(); } }]); };
   if ($('cyc-del')) $('cyc-del').onclick = () => { const id = $('cyc-sel').value, c = S.cycles.find(x => x.id === id); if (!c) return;
     const o = openModal('Delete audit cycle permanently?', `<p>This permanently deletes <b>${esc(c.name)}</b> and <b>all of its data</b>: base stock for every store, all audits, scanned items, entries and results.</p>
       <p class="muted">There is no archive and it cannot be undone. The audit log keeps a record that the cycle was deleted.</p><label class="chk"><input type="checkbox" id="m_ok"> I understand this cannot be undone.</label>`,

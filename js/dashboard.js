@@ -266,7 +266,7 @@ PAGES.storeaudit = async el => {
   const F = { circle: '', status: '', rate: '', variance: '', q: '', tab: 'ALL', page: 0 }; const PS = 10; if (window.__auditPreset) { Object.assign(F, window.__auditPreset); window.__auditPreset = null; }
   const circleIdOf = Object.fromEntries(rows.map(r => [r.circle, r.circle_id]));
   const crit = r => r.audit_status === 'COMPLETED' && r.match_rate != null && r.match_rate < 75;
-  const overdue = r => r.audit_status !== 'COMPLETED' && S.cycleDeadline && Date.now() > new Date(S.cycleDeadline).getTime();
+  const overdue = r => (!S.cycleStatus || S.cycleStatus === 'ACTIVE') && r.audit_status !== 'COMPLETED' && S.cycleDeadline && Date.now() > new Date(S.cycleDeadline).getTime();   // a closed cycle is never overdue
   const list = () => rows.filter(r => (!F.circle || r.circle === F.circle) && (!F.status || r.audit_status === F.status) && (!F.q || (r.name + ' ' + r.code + ' ' + r.circle).toLowerCase().includes(F.q))
     && (!F.rate || (r.match_rate != null && (F.rate === 'crit' ? r.match_rate < 75 : F.rate === 'warn' ? r.match_rate >= 75 && r.match_rate < 90 : r.match_rate >= 90)))
     && (!F.variance || (F.variance === 'short' ? Number(r.short) > 0 : Number(r.excess) > 0))

@@ -2,5 +2,7 @@
 .cyc .rowb{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .cyc .rowb .btn{margin-top:0;width:100%}
 .cyc .btn.clo{border-color:#F5B83D;color:#FFD27A}
+.cyc .btn.reo{margin-top:8px;width:100%;border-color:#16A34A;color:#4ADE80}
+.cyc .btn.reo:hover:not(:disabled){background:rgba(22,163,74,.12)}
 .cyc .btn.clo:hover:not(:disabled){background:rgba(245,184,61,.12)}
 .cyc .btn:disabled{opacity:.4;cursor:not-allowed}
