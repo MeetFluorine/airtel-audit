@@ -3,7 +3,8 @@
 // All numbers come from the server functions rank_my_store(from,to) / rank_staff(from,to)
 // (database/29_ranking_seasons_levels.sql); nothing is calculated here except display + season windows.
 const rkPts = n => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-const rkPct = v => v == null ? '—' : Number(v).toFixed(4).replace(/\.?0+$/, '') + '%';
+const rkPct = v => v == null ? '—' : Number(v).toFixed(3).replace(/\.?0+$/, '') + '%';
+const rkPct2 = v => v == null ? '—' : Number(v).toFixed(2).replace(/\.?0+$/, '') + '%';   // match rate: 2 decimals
 const rkPct1 = v => v == null ? '—' : (Math.round(Number(v) * 10) / 10).toString().replace(/\.0$/, '') + '%';
 const rkStaleBanner = '<div class="alert warn" style="margin-bottom:12px"><b>Database update needed.</b> Run <code>database/29_ranking_seasons_levels.sql</code> in the Supabase SQL editor (after <code>18_ranking.sql</code> if you have not run it), then refresh this page.</div>';
 const rkCpct = o => o.counted_short_pct !== undefined ? o.counted_short_pct : o.short_pct;      // older database versions only send short_pct
@@ -60,7 +61,7 @@ PAGES.ranking = async el => {
     nextCard = `<div class="card rk-next"><span class="rk-medal" style="color:${RK_LVL[next]};background:${RK_LVL[next]}1f;border-color:${RK_LVL[next]}55">${rkMedal(next, 30)}</span>
       <div class="rk-nm"><b>Next Level: ${next}</b><span>Complete more cycles and improve your performance to reach ${next}.</span></div>
       <div class="rk-gates">${gate('Cycle Completion', comp + '%', d.cycles_held > 0 && comp >= g.comp, `≥ ${g.comp}% required`)}
-      ${gate('Match Rate', rkPct(d.match_rate), d.match_rate != null && (g.matchGt ? d.match_rate > g.match : d.match_rate >= g.match), `${g.matchGt ? '&gt;' : '≥'} ${g.match}% required`)}
+      ${gate('Match Rate', rkPct2(d.match_rate), d.match_rate != null && (g.matchGt ? d.match_rate > g.match : d.match_rate >= g.match), `${g.matchGt ? '&gt;' : '≥'} ${g.match}% required`)}
       ${gate('Genuine Shortage', rkPct(rkCpct(d)), rkCpct(d) != null && rkCpct(d) <= g.short, `≤ ${g.short}% required`)}
       ${g.ontime ? gate('On-time Submission', d.late_count ? d.late_count + ' late' : 'All on time', !d.late_count, 'Every audit within its deadline') : ''}</div></div>`; }
   el.innerHTML = `<div class="pagehead"><div><h1>My Ranking</h1><p class="muted" style="margin:4px 0 0">${esc(d.store)} · ${esc(d.circle)} Circle</p></div>
@@ -70,7 +71,7 @@ PAGES.ranking = async el => {
     ${rankCard(rkMedal('Champion', 20), 'Rank in Your Circle', d.circle_rank, d.circle_total, esc(d.circle) + ' Circle')}
     ${rankCard('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.3"/><rect x="9.5" y="8" width="5" height="13" rx="1.3"/><rect x="16" y="3" width="5" height="18" rx="1.3"/></svg>', 'Rank in India', d.pan_rank, d.pan_total, 'All stores')}
     <div class="card rk-pc">${donut}<div><small>Season Progress</small><div class="rk-pn">${comp}% completed</div><div class="bar2 rk-pbar"><i style="width:${comp}%"></i></div><div class="rk-sub">${d.cycles_held ? (d.cycles_held - d.cycles_done) + ' cycle' + (d.cycles_held - d.cycles_done === 1 ? '' : 's') + ' remaining' : 'No cycles yet this season'}</div></div></div></div>
-    <div class="kv kpi"><div class="g"><span>Total Points (This Season)</span><b>${rkPts(d.points)}</b></div><div><span>Match Rate</span><b>${rkPct(d.match_rate)}</b></div><div class="${rkCpct(d) > 0 ? 'a' : ''}"><span>Genuine Shortage %</span><b>${rkPct(rkCpct(d))}</b></div><div><span>In Transit <small>(not counted)</small></span><b>${rkPts(d.short_transit)}</b></div><div class="${d.short_other > 0 ? 'a' : ''}"><span>Other Status <small>(counted)</small></span><b>${rkPts(d.short_other)}</b></div></div>
+    <div class="kv kpi"><div class="g"><span>Total Points (This Season)</span><b>${rkPts(d.points)}</b></div><div><span>Match Rate</span><b>${rkPct2(d.match_rate)}</b></div><div class="${rkCpct(d) > 0 ? 'a' : ''}"><span>Genuine Shortage %</span><b>${rkPct(rkCpct(d))}</b></div><div><span>In Transit <small>(not counted)</small></span><b>${rkPts(d.short_transit)}</b></div><div class="${d.short_other > 0 ? 'a' : ''}"><span>Other Status <small>(counted)</small></span><b>${rkPts(d.short_other)}</b></div></div>
     <div class="card" style="padding:18px;margin-top:6px"><b>Audit Performance (This Season)</b>${d.cycles.length ? tbl(['Audit cycle', 'Status', 'Short (all)', 'In transit', 'Other status', 'Match rate (for points)', 'Points'], d.cycles.map(c => `<tr><td>${esc(c.name)}${c.status === 'ACTIVE' ? ' ' + badge('Open', 'info') : ''}</td><td>${c.done ? badge('Completed', 'ok') : badge('Not completed', 'bad')}</td>
       <td>${c.done ? rkPts(c.short) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td><b>${rkPts(c.points)}</b></td></tr>`).join('')) : '<p class="muted">No audit cycle yet this season.</p>'}</div>${nextCard}${rkHow()}`;
 };
@@ -121,7 +122,7 @@ async function rankStaff(el) {
   const topCard3 = (s, r) => `<div class="rpc3 w${r}">${crown(r)}<div class="rpc3-main"><span class="rkmedal m${r}">${r}</span>
     <div class="rpc3-store"><b>${esc(s.code)}</b><span>${esc(s.name)} (${esc(s.circle)})</span><span>${rkLvlChip(s.level)}</span></div>
     <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>
-    <div class="rpc3-stats"><div><span>India Rank</span><b>#${s.pan_rank}</b></div><div><span>Circle Rank</span><b>#${s.circle_rank}</b></div><div><span>Cycles</span><b>${s.cycles_done}/${s.cycles_held}</b></div><div><span>Match Rate</span><b>${rkPct(s.match_rate)}</b></div><div><span>Genuine Shortage</span><b>${rkPct(rkCpct(s))}</b></div></div>
+    <div class="rpc3-stats"><div><span>India Rank</span><b>#${s.pan_rank}</b></div><div><span>Circle Rank</span><b>#${s.circle_rank}</b></div><div><span>Cycles</span><b>${s.cycles_done}/${s.cycles_held}</b></div><div><span>Match Rate</span><b>${rkPct2(s.match_rate)}</b></div><div><span>Genuine Shortage</span><b>${rkPct(rkCpct(s))}</b></div></div>
     <div class="rpc3-qty"><span>In Transit <b>${rkPts(s.short_transit)}</b> (not counted)</span><span>Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
   const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b><span>Based on total points this season</span></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
   const SC = [
@@ -132,7 +133,7 @@ async function rankStaff(el) {
     { k: 'level', w: 10, l: 'Level', t: 'text', get: s => s.level || 'Unranked', cell: s => rkLvlChip(s.level) },
     { k: 'points', w: 7, l: 'Points', t: 'num', get: s => s.points, cell: s => `<b>${rkPts(s.points)}</b>` },
     { k: 'cycles_done', w: 9, l: 'Cycles', t: 'num', get: s => s.cycles_done, cell: s => `<div class="rk-cyc"><span>${s.cycles_done} / ${s.cycles_held}</span><span class="rk-cbar"><i style="width:${s.cycles_held ? 100 * s.cycles_done / s.cycles_held : 0}%"></i></span></div>` },
-    { k: 'match_rate', w: 8, l: 'Match Rate', t: 'num', get: s => s.match_rate, cell: s => rkPct(s.match_rate) },
+    { k: 'match_rate', w: 8, l: 'Match Rate', t: 'num', get: s => s.match_rate, cell: s => rkPct2(s.match_rate) },
     { k: 'short_transit', w: 8, l: 'In Transit', t: 'num', get: s => s.short_transit, cell: s => rkPts(s.short_transit) },
     { k: 'counted_short_pct', w: 10, l: 'Genuine Shortage %', t: 'num', get: s => rkCpct(s), cell: s => rkPct(rkCpct(s)) },
     { k: 'go', w: 13, l: 'Action', ns: true, t: 'text', get: () => '', cell: s => `<span class="rk-act"><a class="rk-view" href="#/storedetail?s=${s.id}&from=ranking">${ic('eye', 14)} View</a><span class="rk-dw"><button type="button" class="rk-dots" data-dot="${s.id}" title="More actions">&#8942;</button><span class="rk-dmenu" hidden><a href="#/storedetail?s=${s.id}&from=ranking">View audit detail</a></span></span></span>` }];
