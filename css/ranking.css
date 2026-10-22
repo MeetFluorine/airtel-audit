@@ -272,3 +272,30 @@
 .rk-sr.ok{color:#12805C}
 .rk-sr.no{color:#EA580C}
 @media (max-width:640px){.rk-segs{margin-left:0;gap:16px}.rk-nchip{white-space:normal}}
+
+/* ---- Store My Ranking: layout refinement (spacing/proportions only) ---- */
+.rk-top4{grid-template-columns:1.32fr .96fr .96fr 1.08fr;align-items:stretch}
+.rk-top4>.card{height:100%}
+.rk-lrow{flex-wrap:wrap;row-gap:2px}
+.rk-nchip{padding-top:3px}
+.rk-lname{font-size:26px}
+.rk-lmeta{flex-wrap:nowrap}
+.rk-lmeta>span{min-width:0}
+.rk-lneed{white-space:nowrap}
+.rk-kpi2>div{min-width:0}
+.rk-kv2{white-space:nowrap}
+.rk-pc>div{min-width:0}
+.rk-nm{flex:0 1 290px;min-width:215px}
+.rk-segs{flex:1 1 auto;justify-content:space-between;gap:14px 22px}
+.rk-seg{flex:1 1 172px;min-width:172px}
+.rk-twrap td,.rk-twrap th{white-space:nowrap}
+.rk-jchip{flex:none}
+@media (max-width:1100px){.rk-top4{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){
+  .rk-top4 .rk-lvl{order:1}
+  .rk-top4 .rc-c{order:2}
+  .rk-top4 .rc-i{order:3}
+  .rk-top4 .rk-pc{order:4}
+  .rk-segs{margin-left:0}
+  .rk-seg{flex-basis:calc(50% - 12px);min-width:150px}
+}
