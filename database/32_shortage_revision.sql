@@ -115,7 +115,7 @@ begin
   if p_category is not null then
     select * into v_cat from public.remark_categories where id = p_category;
     if not found or not v_cat.active then raise exception 'Please choose a valid remark category.' using errcode = 'P0001'; end if;
-    if v_cat.ref_required and v_ref = '' then raise exception ('Reference is required for ' || v_cat.name || ' (' || v_cat.ref_label || ').') using errcode = 'P0001'; end if;
+    if v_cat.ref_required and v_ref = '' then raise exception 'Reference is required for % (%).', v_cat.name, v_cat.ref_label using errcode = 'P0001'; end if;
   elsif v_note = '' then
     raise exception 'Pick a remark category or write a remark.' using errcode = 'P0001'; end if;
   if char_length(v_note) > 500 then raise exception 'Remarks can be at most 500 characters.' using errcode = 'P0001'; end if;
