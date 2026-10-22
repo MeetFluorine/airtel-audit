@@ -433,11 +433,11 @@ async function downloadVariance(sid, storeCode, cycleName, btn) {
 }
 async function resultView(el, sid, embedded) {
   const staff = isStaff();
-  const cnt = async ser => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser)).count) || 0;
-  const [si, sm, nSer, nNon, vbR, fvR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,store_id,audit_cycle_id,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true), cnt(false), sb.rpc('store_variance_breakdown', { p_session: sid }), sb.rpc('result_filter_values', { p_session: sid })]);
+  const cnt = async (ser, res) => { let q = sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser); if (res) q = q.eq('result', res); return ((await q).count) || 0; };
+  const [si, sm, nSerS, nNonS, vbR, fvR] = await Promise.all([sb.from('audit_sessions').select('id,version,status,submitted_at,store_id,audit_cycle_id,stores(code,name),audit_cycles(name)').eq('id', sid).maybeSingle(), sb.rpc('result_summary', { p_session: sid }), cnt(true, 'SHORT'), cnt(false, 'SHORT'), sb.rpc('store_variance_breakdown', { p_session: sid }), sb.rpc('result_filter_values', { p_session: sid })]);
   if (si.error || !si.data) throw si.error || new Error('Result not found');
   if (sm.error) throw sm.error;
-  const ss = si.data, m = sm.data; let tab = 'ALL', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
+  const ss = si.data, m = sm.data; let tab = 'SERSHORT', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
   const subCache = {}; let rows = [];
   const fv = fvR && !fvR.error && fvR.data ? fvR.data : null;      // distinct values for the click-to-select filters (database/19)
   const fetchFV = async c => { const col = c.col || c.k; const r = await sb.from('reconciliation_results').select(col).eq('session_id', sid); return r.error || !r.data ? null : r.data.map(x => x[col]); };   // on-demand fallback: keeps the tick-list UI even when the RPC has no values
@@ -451,7 +451,10 @@ async function resultView(el, sid, embedded) {
   const cats = revDb && !catR.error && Array.isArray(catR.data) ? catR.data : null, catById = {};
   if (cats) cats.forEach(c => { catById[c.id] = c; });
   const canEdit = rmkOk && !staff && ss.status === 'LOCKED';
-  const tabs = [['ALL', 'All Items', m.rows_all], ['SERIAL', 'Serialized', nSer], ['NONSERIAL', 'Non-Serialized', nNon], ['MATCH', 'Matched', m.rows_match], ['SHORT', 'Short', m.rows_short], ['EXCESS', 'Excess', m.rows_excess]];
+  /* shortage-first tabs: the page opens on shortage lines only (few rows, fast, remarks right there);
+     Excess / Matched / All Items query the database only when the user clicks them */
+  const tabs = [['SERSHORT', 'Serialized Shortage', nSerS], ['NONSHORT', 'Non-Serialized Shortage', nNonS], ['EXCESS', 'Excess', m.rows_excess], ['MATCH', 'Matched', m.rows_match], ['ALL', 'All Items', m.rows_all]];
+  tab = nSerS > 0 ? 'SERSHORT' : nNonS > 0 ? 'NONSHORT' : Number(m.rows_excess) > 0 ? 'EXCESS' : 'ALL';
   const matched = Number(m.matched), shortU = Number(m.short), excessU = Number(m.excess);
   const vb = Object.assign({ ser_short: 0, ser_excess: 0, non_short: 0, non_excess: 0 }, (vbR && vbR.data) || {});
   const rate = m.match_rate == null ? null : Number(m.match_rate);
@@ -474,7 +477,7 @@ async function resultView(el, sid, embedded) {
       <div class="rstats">${stat('', 'box', 'Expected', fn(m.expected))}${stat('g', 'check', 'Found', fn(m.physical))}${stat('r', 'alert', 'Short', fn(shortU), shSub)}${stat('y', 'trend', 'Excess', fn(excessU))}</div></div>
       <div class="rpills">${pills}</div></div>
     ${revStrip}
-    <div class="rtool"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div>
+    <div class="rtool"><div class="tabs seg" id="rtabs">${tabs.map(t => `<button class="tab ${t[0] === 'SERSHORT' || t[0] === 'NONSHORT' ? 'red' : ''}" data-ty="${t[0]}">${t[1]} (${fn(t[2])})</button>`).join('')}</div>
       <div class="inp rsearch">${ic('search', 18)}<input id="q" placeholder="Search item code, description or serial..."></div></div>
     <div class="subtabs" id="rsub" hidden></div><div class="fchips" id="rchips" hidden></div><div id="rt"></div></div>`;
 
@@ -486,7 +489,7 @@ async function resultView(el, sid, embedded) {
   const WIDTHS = rmkOk ? [4, 9, 15, 9, 5, 7, 7, 7, 7, 11, 7, 12] : [4, 10, 19, 10, 6, 8, 8, 8, 7, 12, 8];     // % of the table width: it always fits, no sideways scrolling
   const ib = v => !v ? '—' : `<span class="ib ${/transit/i.test(v) ? 'b' : /^active$/i.test(v) ? 'g' : 'n'}">${esc(v)}</span>`;
 
-  const split = () => tab === 'SERIAL' || tab === 'NONSERIAL';
+  const split = () => false;      // the old Serialized/Non-Serialized sub-tabs are gone: the five tabs above are flat now
   async function subCounts() {
     if (subCache[tab]) return subCache[tab]; const ser = tab === 'SERIAL';
     const c = async r => ((await sb.from('reconciliation_results').select('id', { count: 'exact', head: true }).eq('session_id', sid).eq('is_serialized', ser).eq('result', r)).count) || 0;
@@ -501,12 +504,14 @@ async function resultView(el, sid, embedded) {
   async function load() {
     mark(); const rt = el.querySelector('#rt'); rt.innerHTML = universeLoader();
     let qb = sb.from('reconciliation_results').select('item_code,inventory_status,item_description,item_uom,expected_qty,physical_qty,item_quality,item_sno,result,is_unlisted,is_serialized,short_qty', { count: 'exact' }).eq('session_id', sid);
-    if (tab === 'SERIAL') qb = qb.eq('is_serialized', true); else if (tab === 'NONSERIAL') qb = qb.eq('is_serialized', false); else if (tab !== 'ALL') qb = qb.eq('result', tab);
-    if (split() && sub !== 'ALL') qb = qb.eq('result', sub);
+    if (tab === 'SERSHORT') qb = qb.eq('is_serialized', true).eq('result', 'SHORT');
+    else if (tab === 'NONSHORT') qb = qb.eq('is_serialized', false).eq('result', 'SHORT');
+    else if (tab === 'EXCESS') qb = qb.eq('result', 'EXCESS');
+    else if (tab === 'MATCH') qb = qb.eq('result', 'MATCH');
     const t = q.replace(/[,()%*\\]/g, ' ').trim(); if (t) qb = qb.or(`item_code.ilike.*${t}*,item_sno.ilike.*${t}*,item_description.ilike.*${t}*`);
     qb = CF.apply(qb);
     const { data, error, count } = await qb.order('item_code').order('item_sno').range(page * PS, page * PS + PS - 1);
-    if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))}</div>`; return; }
+    if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))} <button type="button" class="btn sm" data-retry style="margin-left:8px">Retry</button></div>`; return; }
     rows = data;
     const rbox = (r, i) => { if (!rmkOk || r.result !== 'SHORT') return ''; const e = rmk[rkey(r)];
       if (revDb && cats) {           // structured revision UI (database/32)
@@ -540,6 +545,7 @@ async function resultView(el, sid, embedded) {
         <div class="pgn"><button type="button" class="pgb" data-pgn="${page - 1}" ${page ? '' : 'disabled'}>‹ Previous</button>${nums.map(x => x === '…' ? '<span class="pge">…</span>' : `<button type="button" class="pgb ${x === page ? 'on' : ''}" data-pgn="${x}">${x + 1}</button>`).join('')}<button type="button" class="pgb" data-pgn="${page + 1}" ${(page + 1) * PS < count ? '' : 'disabled'}>Next ›</button></div></div></div>`;
   }
   el.onclick = e => { if (CF.handle(e)) return;
+    const rt3 = e.target.closest('[data-retry]'); if (rt3) { load(); return; }
     const ab = e.target.closest('[data-radd]'); if (ab) { openRemark(rows[+ab.dataset.radd]); return; }
     const db2 = e.target.closest('[data-rdel]'); if (db2) { delRemark(rows[+db2.dataset.rdel]); return; }
     const t = e.target.closest('#rtabs [data-ty]'); if (t) { tab = t.dataset.ty; sub = 'ALL'; page = 0; return load(); }

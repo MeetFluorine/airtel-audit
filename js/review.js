@@ -15,9 +15,11 @@ PAGES.review = async el => {
   const statusChip = s => s.entries === 0 ? '<span class="rchip cat">No remarks</span>' : s.pending_entries > 0 ? `<span class="rchip pen">${s.pending_entries} pending</span>` : '<span class="rchip acc">Reviewed ✓</span>';
 
   function entriesHtml(sid, cid) {
-    const list = (entCache[gkey(sid, cid)] || []).filter(e => (e.category_id || null) === (cid || null));
-    if (!list.length) return '<div class="muted" style="padding:6px 2px">No entries in this group.</div>';
-    return `<table class="tbl rv-ent"><thead><tr><th>Item</th><th>SN / Qty</th><th>Reference</th><th>Note</th><th>Status</th><th>Accepted</th><th></th></tr></thead><tbody>${list.map(e => `<tr>
+    const all = (entCache[gkey(sid, cid)] || []).filter(e => (e.category_id || null) === (cid || null));
+    const list = all.filter(e => e.status !== 'REVIEWED');      // reviewed entries leave the list - only remaining work shows
+    const hid = all.length - list.length;
+    if (!list.length) return `<div class="muted" style="padding:6px 2px">${hid ? 'All entries in this group are reviewed.' : 'No entries in this group.'}</div>`;
+    return (hid ? `<div class="muted" style="padding:2px 2px 6px">${hid} reviewed ${hid === 1 ? 'entry' : 'entries'} hidden — showing pending only.</div>` : '') + `<table class="tbl rv-ent"><thead><tr><th>Item</th><th>SN / Qty</th><th>Reference</th><th>Note</th><th>Status</th><th>Accepted</th><th></th></tr></thead><tbody>${list.map(e => `<tr>
       <td><b>${esc(e.item_code)}</b><div class="muted">${esc(e.inventory_status || '')}${e.item_quality ? ' · ' + esc(e.item_quality) : ''}</div></td>
       <td>${e.item_sno ? esc(e.item_sno) : 'Qty ' + fn(e.qty)}</td>
       <td>${esc(e.reference || '—')}</td><td>${esc(e.remark || '—')}</td>
@@ -28,17 +30,21 @@ PAGES.review = async el => {
 
   function render() {
     const T = stores.reduce((a, s) => ({ rep: a.rep + Number(s.reported || 0), acc: a.acc + Number(s.accepted || 0), pen: a.pen + Number(s.pending_entries || 0) }), { rep: 0, acc: 0, pen: 0 });
-    const cards = stores.length ? stores.map(s => `<div class="card rv-store">
+    /* the queue shows only remaining work: stores with nothing pending (fully reviewed, or no remarks at all) leave the list */
+    const visible = stores.filter(s => Number(s.pending_entries) > 0);
+    const reviewedN = stores.filter(s => Number(s.entries) > 0 && Number(s.pending_entries) === 0).length;
+    const noRemarkN = stores.filter(s => Number(s.entries) === 0).length;
+    const cards = visible.length ? visible.map(s => { const gs = s.groups.filter(g => Number(g.pending) > 0); return `<div class="card rv-store">
       <button type="button" class="rv-head" data-open="${s.session_id}"><span class="rv-code">${esc(s.code)}</span><span class="muted">${esc(s.circle)} Circle</span>${statusChip(s)}
         <span class="rv-nums"><span>Reported <b class="r">${fn(s.reported)}</b></span><span>Claimed <b>${fn(s.claimed)}</b></span><span>Accepted <b class="g">${fn(s.accepted)}</b></span><span>Revised <b>${fn(s.revised)}</b></span></span></button>
-      ${open.has(s.session_id) ? `<div class="rv-body">${s.groups.length ? `<table class="tbl"><thead><tr><th>Remark</th><th>Entries</th><th>Claimed</th><th>Accepted</th><th></th><th></th></tr></thead><tbody>${s.groups.map(g => `<tr>
+      ${open.has(s.session_id) ? `<div class="rv-body">${gs.length ? `<table class="tbl"><thead><tr><th>Remark</th><th>Entries</th><th>Claimed</th><th>Accepted</th><th></th><th></th></tr></thead><tbody>${gs.map(g => `<tr>
           <td><b>${esc(g.category)}</b>${g.pending ? ` <span class="rchip pen">${g.pending} pending</span>` : ''}</td><td>${g.entries}</td><td>${fn(g.claimed)}</td>
           <td class="rv-acc"><input type="number" min="0" step="any" max="${g.claimed}" value="${g.pending === g.entries ? g.claimed : g.accepted}" data-gacc="${s.session_id}|${g.category_id || ''}" data-max="${g.claimed}"></td>
           <td style="white-space:nowrap"><button type="button" class="btn sm yel" data-gsave="${s.session_id}" data-cat="${g.category_id || ''}">Accept</button> <button type="button" class="btn sm rej" data-grej="${s.session_id}" data-cat="${g.category_id || ''}">Reject</button></td>
           <td><button type="button" class="btn sm" data-entries="${s.session_id}" data-cat="${g.category_id || ''}">${entOpen.has(gkey(s.session_id, g.category_id)) ? 'Hide entries' : 'View entries'}</button></td></tr>
           ${entOpen.has(gkey(s.session_id, g.category_id)) ? `<tr><td colspan="6">${entriesHtml(s.session_id, g.category_id)}</td></tr>` : ''}`).join('')}</tbody></table>
-        <p class="muted" style="font-size:12px;margin:10px 0 0">Set the accepted quantity per remark — the button reads <b>Accept</b> at the full claimed quantity, <b>Partially accept</b> below it; <b>Reject</b> keeps the whole quantity as genuine shortage. Use View entries to accept or reject item by item (serial-wise).</p>` : '<p class="muted" style="padding:8px 2px">No remarks from this store yet — its genuine shortage stands as reported.</p>'}</div>` : ''}
-    </div>`).join('') : '<div class="card" style="padding:18px"><p class="muted" style="margin:0">No store has genuine shortage in this cycle yet.</p></div>';
+        <p class="muted" style="font-size:12px;margin:10px 0 0">Set the accepted quantity per remark — the button reads <b>Accept</b> at the full claimed quantity, <b>Partially accept</b> below it; <b>Reject</b> keeps the whole quantity as genuine shortage. Use View entries to accept or reject item by item (serial-wise).</p>${s.groups.length > gs.length ? `<p class="muted" style="font-size:12px;margin:6px 0 0">${s.groups.length - gs.length} remark group(s) already reviewed — hidden.</p>` : ''}` : '<p class="muted" style="padding:8px 2px">No remarks from this store yet — its genuine shortage stands as reported.</p>'}</div>` : ''}
+    </div>`; }).join('') : '<div class="card" style="padding:18px"><p class="muted" style="margin:0">All caught up — no store has remarks waiting for review in this cycle.</p></div>';
     const catCard = admin ? `<div class="card" style="padding:16px;margin-top:16px"><div class="cardhead"><b>Remark categories</b><span class="muted">Stores pick from this list when explaining a shortage. Deactivated categories stay on old remarks but cannot be picked again.</span></div>
       <table class="tbl"><thead><tr><th>Category</th><th>Reference label</th><th>Ref. required</th><th>Order</th><th>Active</th><th></th></tr></thead><tbody>
       ${cats.map(c => `<tr><td><input class="c-name" data-cid="${c.id}" value="${esc(c.name)}" style="width:100%;min-width:130px"></td>
@@ -51,8 +57,9 @@ PAGES.review = async el => {
         <td><input id="nc-ref" placeholder="Reference label (e.g. Order no.)" style="width:100%;min-width:150px"></td>
         <td><input type="checkbox" id="nc-req"></td><td></td><td></td>
         <td><button type="button" class="btn sm yel" id="nc-add">Add</button></td></tr></tbody></table></div>` : '';
+    const hiddenNote = (reviewedN || noRemarkN) ? `<p class="muted" style="margin:10px 2px 0;font-size:12.5px">Not shown above: ${[reviewedN ? reviewedN + ' store(s) fully reviewed' : '', noRemarkN ? noRemarkN + ' store(s) with no remarks' : ''].filter(Boolean).join(' · ')} — this list shows only stores with remarks still to review.</p>` : '';
     el.innerHTML = `<div class="card revstrip"><span class="rvt">${ic('clip', 16)} ${esc(S.cycleName || 'This cycle')}</span><span>Stores <b>${stores.length}</b></span><span>Reported genuine <b class="r">${fn(T.rep)}</b></span><span>Accepted <b class="g">${fn(T.acc)}</b></span><span>Revised genuine <b>${fn(Math.max(0, T.rep - T.acc))}</b></span>${T.pen ? `<span class="rvp">${T.pen} remark${T.pen === 1 ? '' : 's'} awaiting review</span>` : ''}</div>`
-      + `<div style="display:grid;gap:12px">${cards}</div>` + catCard;
+      + `<div style="display:grid;gap:12px">${cards}</div>` + hiddenNote + catCard;
     wire();
   }
 
