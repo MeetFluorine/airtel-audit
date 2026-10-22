@@ -14,6 +14,16 @@
 -- Run once in the Supabase SQL Editor, after 27_storage_backup_fix.sql (safe to re-run).
 -- =====================================================================
 
+-- ---------- 1) new log entry type (audit_events has a fixed list) ----------
+alter table public.audit_events drop constraint if exists audit_events_event_type_check;
+alter table public.audit_events add constraint audit_events_event_type_check check (event_type in (
+  'LOGIN','AUDIT_STARTED','SERIAL_SCANNED','SERIAL_DUPLICATE','SERIAL_NOT_FOUND','UNLISTED_SERIAL_ADDED',
+  'NON_SERIAL_ADDED','ENTRY_REMOVED','ENTRY_EDITED','PREVIEW_OPENED','AUDIT_SUBMITTED','AUDIT_LOCKED',
+  'AUDIT_REOPENED','BASE_UPLOADED','BASE_FROZEN','USER_APPROVED','USER_REJECTED','USER_STORE_CHANGED',
+  'REPORT_EXPORTED','VALIDATION_FAILED','STORE_REPORT_NAME_SET','BASE_UPLOAD_WARNING','CYCLE_DELETED','USER_DELETED',
+  'CYCLE_CLOSED','CYCLE_REOPENED'));
+
+-- ---------- 2) the reopen function ----------
 create or replace function public.admin_reopen_cycle(p_cycle uuid) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare v_name text; v_status text; v_deadline timestamptz;
