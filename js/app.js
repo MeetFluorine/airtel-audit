@@ -160,6 +160,7 @@ function paintMtabs() {
   const tab = S.cur === 'dashboard' ? 'dashboard' : S.cur === 'result' ? 'result' : S.cur === 'audit' ? (/tab=non/.test(h) ? 'entry' : 'audit') : '';
   m.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.mt === tab));
 }
+function setCycLabel(name) { const n = document.getElementById('cyc-name'); if (n) n.textContent = name || '—'; }
 async function fillTop() {
   try {
     if (isStaff()) {
@@ -167,7 +168,12 @@ async function fillTop() {
       const d = document.getElementById('beldot'); if (d) d.hidden = !S.pending;
     } else {
       const { data } = await sb.rpc('my_audit_context'); S.ctx = data;
-      const n = document.getElementById('cyc-name'); if (n) n.textContent = data && data.cycle ? data.cycle.name : '—';
+      /* the chip names the cycle being VIEWED: a previous cycle picked from the chip (#/result?cycle=…) wins; otherwise the latest (current) cycle */
+      const want = /^#\/result/.test(location.hash || '') ? new URLSearchParams(location.hash.split('?')[1] || '').get('cycle') : null;
+      if (want && want !== (data && data.cycle && data.cycle.id)) {
+        const r = await sb.from('audit_cycles').select('name').eq('id', want).maybeSingle();
+        setCycLabel(r.data ? r.data.name : (data && data.cycle ? data.cycle.name : null));
+      } else setCycLabel(data && data.cycle ? data.cycle.name : null);
       const d = document.getElementById('beldot'); if (d) d.hidden = !(data && data.session && data.session.reopen_reason && data.session.status === 'IN_PROGRESS');
     }
   } catch (e) { /* topbar extras are optional */ }

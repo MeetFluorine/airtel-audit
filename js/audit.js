@@ -44,6 +44,7 @@ const tile = (i, bg, fg) => `<span class="tile" style="background:${bg};color:${
 /* ---- dashboard (store user) ---- */
 async function storeDash(el) {
   const p = S.profile; const { data: c, error } = await sb.rpc('my_audit_context'); if (error) throw error;
+  if (typeof setCycLabel === 'function') setCycLabel(c.cycle && c.cycle.name);   // dashboard always shows the latest (current) cycle
   const s = c.session, cn = c.counts || {}, first = (p.full_name || '').split(' ')[0];
   let sum = null; if (s && s.status === 'LOCKED') { const r = await sb.rpc('result_summary', { p_session: s.id }); sum = r.data; }
   const cta = !c.cycle ? '<div class="alert warn" style="margin:0">No audit is open for your store yet. Set up your store\'s base data from <a href="#/basedata">Base Data</a> (or ask your administrator).</div>'
@@ -68,6 +69,7 @@ PAGES.audit = async el => {
   Q.leave();
   if (isStaff()) { el.innerHTML = '<div class="card" style="padding:24px"><h2>Store users only</h2><p class="muted">Audits are performed by the store team.</p></div>'; return; }
   const { data: c, error } = await sb.rpc('my_audit_context'); if (error) throw error;
+  if (typeof setCycLabel === 'function') setCycLabel(c.cycle && c.cycle.name);
   if (!c.cycle) { el.innerHTML = '<div class="card startcard"><h2>No audit is open for your store yet</h2><p class="muted">Your store\'s base data has to be set up first. <a href="#/basedata">Open Base Data</a> to upload it, or ask your administrator.</p></div>'; return; }
   if (!c.session) {
     el.innerHTML = `<div class="pagehead"><div><h1>Start Audit</h1></div></div><div class="card startcard sastart"><span class="sa-ic">${ic('filesearch', 44, 1.5)}</span>
@@ -438,6 +440,7 @@ async function resultView(el, sid, embedded) {
   if (si.error || !si.data) throw si.error || new Error('Result not found');
   if (sm.error) throw sm.error;
   const ss = si.data, m = sm.data; let tab = 'SERSHORT', sub = 'ALL', q = '', page = 0, timer = null; const PS = 50;
+  if (typeof setCycLabel === 'function') setCycLabel(ss.audit_cycles && ss.audit_cycles.name);   // header chip names the cycle this result belongs to
   const subCache = {}; let rows = [];
   const fv = fvR && !fvR.error && fvR.data ? fvR.data : null;      // distinct values for the click-to-select filters (database/19)
   const fetchFV = async c => { const col = c.col || c.k; const r = await sb.from('reconciliation_results').select(col).eq('session_id', sid); return r.error || !r.data ? null : r.data.map(x => x[col]); };   // on-demand fallback: keeps the tick-list UI even when the RPC has no values
