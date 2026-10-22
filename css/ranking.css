@@ -198,8 +198,8 @@
 .rpc3-stats{grid-template-columns:repeat(5,1fr);gap:4px}
 .rpc3-stats>div{display:flex;flex-direction:column;align-items:center;gap:3px;color:#84958A}
 .rpc3-stats b{font-size:13.5px;color:#123}
-.rpc3-qty{align-items:center;gap:12px}
-.rpc3-qty>span{display:inline-flex;align-items:center;gap:6px}
+.rpc3-qty{align-items:center;gap:9px;flex-wrap:nowrap;white-space:nowrap;font-size:11.5px;overflow:hidden}
+.rpc3-qty>span{display:inline-flex;align-items:center;gap:5px;flex:none}
 .rpc3-qty .q-tr svg{color:#2563EB}
 .rpc3-qty .q-wn svg{color:#D97706}
 .rpc3-qty small{font-size:10.5px;color:#84958A;font-weight:600}

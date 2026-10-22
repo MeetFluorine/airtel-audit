@@ -120,18 +120,18 @@ async function rankStaff(el) {
   // Pan-India Top 3 (admin only): wide cards with level chips + season stats (design module, Oct 2026)
   const crown = r => `<svg class="crown c${r}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.8 7.2 7.2 10.8l4.8-6 4.8 6 4.4-3.6-2 10.8H4.8z"/><rect x="4.8" y="19" width="14.4" height="2" rx="1"/></svg>`;
   // Top-3 stat icons (metrics are icon + value only, no text labels - owner design)
-  const ti = (inner) => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
-  const TI = { flag: ti('<path d="M5 21V4"/><path d="M5 4h12.5l-2.5 4 2.5 4H5"/>'),
-    users: ti('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 15.2c2.3.2 3.9 1.6 4.4 4.3"/>'),
-    cal: ti('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15.5l2 2 4-4"/>'),
-    bars: ti('<path d="M4 20V12M10 20V5M16 20v-8M21 20H3"/>'),
-    warn: ti('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8v.2"/>'),
-    truck: ti('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>') };
+  const ti = (inner, col) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${col || '#2563EB'}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+  const TI = { flag: `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21.5v-17" stroke="#64748B" stroke-width="2" stroke-linecap="round"/><rect x="4" y="4.5" width="17" height="4.6" fill="#F4901E"/><rect x="4" y="9.1" width="17" height="4.6" fill="#FFFFFF" stroke="#E2E8F0" stroke-width=".6"/><rect x="4" y="13.7" width="17" height="4.6" fill="#138808"/><circle cx="12.5" cy="11.4" r="1.5" fill="none" stroke="#2B4C9B" stroke-width="1"/></svg>`,
+    users: ti('<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 15.2c2.3.2 3.9 1.6 4.4 4.3"/>', '#2563EB'),
+    cal: ti('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M9 15.5l2 2 4-4"/>', '#0E7490'),
+    bars: ti('<path d="M4 20V12M10 20V5M16 20v-8M21 20H3"/>', '#2563EB'),
+    warn: ti('<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 16.8v.2"/>', '#DC2626'),
+    truck: ti('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>', '#2563EB') };
   const topCard3 = (s, r) => `<div class="rpc3 w${r}">${crown(r)}<div class="rpc3-main"><span class="rkmedal m${r}">${r}</span>
     <div class="rpc3-store"><b>${esc(s.code)}</b><span>${esc(s.name)} (${esc(s.circle)})</span><span>${rkLvlChip(s.level)}</span></div>
     <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>
     <div class="rpc3-stats"><div title="India rank">${TI.flag}<b>#${s.pan_rank}</b></div><div title="Circle rank">${TI.users}<b>#${s.circle_rank}</b></div><div title="Cycles completed">${TI.cal}<b>${s.cycles_done}/${s.cycles_held}</b></div><div title="Match rate">${TI.bars}<b>${rkPct2(s.match_rate)}</b></div><div title="Genuine shortage %">${TI.warn}<b>${rkPct(rkCpct(s))}</b></div></div>
-    <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b> <small>(not counted)</small></span><span class="q-sep">|</span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
+    <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b></span><span class="q-sep">|</span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
   const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
   const SC = [
     { k: 'pan_rank', w: 6, l: '# (India)', t: 'num', get: s => s.pan_rank, cell: s => ranked(s) ? `<b>${s.pan_rank}</b>` : '—' },
