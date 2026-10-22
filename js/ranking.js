@@ -1,25 +1,78 @@
-// Ranking: store user = own circle / India rank; circle head = his stores' ranks; admin = all stores, all circles, Top 3 India podium.
-// All numbers come from the server functions rank_my_store() / rank_staff() (database/18_ranking.sql); nothing is calculated here except display.
+// Ranking runs in SEASONS (3-month calendar quarters) with LEVELS. Store user = own level / ranks;
+// circle head = his stores' ranks; admin = all stores, all circles, Top 3 India.
+// All numbers come from the server functions rank_my_store(from,to) / rank_staff(from,to)
+// (database/29_ranking_seasons_levels.sql); nothing is calculated here except display + season windows.
 const rkPts = n => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const rkPct = v => v == null ? '—' : Number(v).toFixed(3).replace(/\.?0+$/, '') + '%';
-const rkStaleBanner = '<div class="alert warn" style="margin-bottom:12px"><b>Database update needed.</b> The shortage figures are blank because the ranking function in your database is the older version. Run <code>database/18_ranking.sql</code> in the Supabase SQL editor (then <code>20_short_split_revise_base.sql</code> if you have not), and refresh this page.</div>';
+const rkPct1 = v => v == null ? '—' : (Math.round(Number(v) * 10) / 10).toString().replace(/\.0$/, '') + '%';
+const rkStaleBanner = '<div class="alert warn" style="margin-bottom:12px"><b>Database update needed.</b> Run <code>database/29_ranking_seasons_levels.sql</code> in the Supabase SQL editor (after <code>18_ranking.sql</code> if you have not run it), then refresh this page.</div>';
 const rkCpct = o => o.counted_short_pct !== undefined ? o.counted_short_pct : o.short_pct;      // older database versions only send short_pct
 const rkPill = (n, ranked = true) => ranked ? `<span class="rk ${n <= 3 ? 'r' + n : ''}">${n}</span>` : '<span class="rk">—</span>';
-const rkHow = () => `<details class="rk-how"><summary>How points and ranks work</summary>
-  <p>For every audit cycle your store <b>completes</b> you earn <b>20 points for taking part</b> plus <b>your match rate</b> (up to 100 points). A cycle you do not complete earns 0.</p>
-  <p><b>In-transit shortage is kept separate.</b> Your audit result still shows every short item as it is. For the ranking, shortage on items whose Inventory_Status is In Transit (already moved out of the store) is shown on its own and is <b>not counted against you</b>: the match rate used for points is your matched stock against the shortage of all <b>other</b> statuses.</p>
-  <p>Your rank is based on total points. If stores have the same points, the one with the <b>lower shortage %</b> (other-status shortage compared with the total expected quantity) ranks higher. Ranks run 1, 2, 3 without gaps: if two stores share rank 1, the next store is rank 2. Circles are ranked on the <b>average points per store</b>, so big and small circles compare fairly.</p></details>`;
+
+/* ---------- seasons: calendar quarters; a cycle belongs to the season it was created in ---------- */
+const RK_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function rkSeasonOf(dt) { const d = new Date(dt), q = Math.floor(d.getMonth() / 3), y = d.getFullYear();
+  return { key: y + 'Q' + (q + 1), y, q: q + 1, from: new Date(y, q * 3, 1), to: new Date(y, q * 3 + 3, 1) }; }
+function rkSeasonLabel(s) { return `Q${s.q} ${s.y} (${RK_MON[s.from.getMonth()]} – ${RK_MON[s.from.getMonth() + 2]})`; }
+function rkSeasons() { const map = new Map(), cur = rkSeasonOf(new Date());
+  (S.cycles || []).forEach(c => { const s = rkSeasonOf(c.created_at); if (!map.has(s.key)) map.set(s.key, s); });
+  if (!map.has(cur.key)) map.set(cur.key, cur);
+  return [...map.values()].sort((a, b) => b.from - a.from).map(s => ({ ...s, label: rkSeasonLabel(s), live: s.key === cur.key })); }
+const rkWin = s => ({ p_from: s.from.toISOString(), p_to: s.to.toISOString() });
+
+/* ---------- levels (gates mirror public._store_level in migration 29) ---------- */
+const RK_LEVELS = ['Unranked', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Champion'];
+const RK_LVL = { Champion: '#7C3AED', Diamond: '#2563EB', Platinum: '#0E7490', Gold: '#B8860B', Silver: '#64748B', Bronze: '#B45309', Unranked: '#94A3B8' };
+const RK_GATES = { Bronze: { comp: 50, match: 85, short: 8 }, Silver: { comp: 65, match: 90, short: 5 }, Gold: { comp: 80, match: 93, short: 3.5 },
+  Platinum: { comp: 90, match: 95, short: 2.5 }, Diamond: { comp: 100, match: 97, short: 1.5 }, Champion: { comp: 100, match: 98, short: 1, ontime: true } };
+const rkMedal = (lvl, sz = 13) => lvl === 'Champion'
+  ? `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.8 7.2 7.2 10.8l4.8-6 4.8 6 4.4-3.6-2 10.8H4.8z"/><rect x="4.8" y="19" width="14.4" height="2" rx="1"/></svg>`
+  : lvl === 'Diamond' || lvl === 'Platinum'
+  ? `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 3h12l3.5 5.5L12 21 2.5 8.5z"/></svg>`
+  : `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.1 1.1-6.5L2.6 9.4l6.5-.9z"/></svg>`;
+const rkLvlChip = l => { l = l || 'Unranked'; const c = RK_LVL[l] || RK_LVL.Unranked;
+  return `<span class="lvl" style="color:${c};background:${c}1f">${rkMedal(l)} ${l}</span>` };
+const rkHow = () => `<details class="rk-how"><summary>How points, levels and ranks work</summary>
+  <p><b>Seasons.</b> Ranking runs in 3-month seasons (calendar quarters: Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec). Only audit cycles of the season count, so every season starts fresh and a finished season's result never changes.</p>
+  <p><b>Points.</b> For every cycle of the season your store <b>completes</b> you earn <b>20 points for taking part</b> plus <b>your match rate</b> (up to 100 points). A cycle you do not complete earns 0.</p>
+  <p><b>In-transit shortage is kept separate.</b> Your audit result still shows every short item as it is. For the ranking, shortage on items whose Inventory_Status is In Transit (already moved out of the store) is shown on its own and is <b>not counted against you</b>: the match rate used for points is your matched stock against the shortage of all <b>other</b> statuses (the "genuine" shortage).</p>
+  <p><b>Levels.</b> Points alone are not enough — a level also needs quality: Bronze ≥ 50% of the season's cycles completed, match ≥ 85%, genuine shortage ≤ 8% · Silver ≥ 65%, ≥ 90%, ≤ 5% · Gold ≥ 80%, ≥ 93%, ≤ 3.5% · Platinum ≥ 90%, ≥ 95%, ≤ 2.5% · Diamond 100%, ≥ 97%, ≤ 1.5% · Champion 100%, ≥ 98%, ≤ 1% and every audit submitted within its deadline.</p>
+  <p><b>Ranks.</b> Your rank is based on total points of the season. If stores have the same points, the one with the <b>lower genuine shortage %</b> ranks higher. Ranks run 1, 2, 3 without gaps: if two stores share rank 1, the next store is rank 2. Circles are ranked on the <b>average points per store</b>, so big and small circles compare fairly.</p></details>`;
 
 PAGES.ranking = async el => {
   if (isStaff()) return rankStaff(el);
-  const { data: d, error } = await sb.rpc('rank_my_store'); if (error) throw error;
-  if (!d || !d.ranked) { el.innerHTML = '<div class="card startcard"><h2>Ranking not available yet</h2><p class="muted">Your store is not part of the ranking.</p></div>'; return; }
-  const none = !d.cycles_done, big = (t, n, tot, sub) => `<div class="card rk-big"><small>${t}</small><div class="rk-n">${none ? '—' : '#' + n}</div><div class="rk-of">${none ? 'Complete your first audit to get ranked' : ''}</div><div class="rk-sub">${sub}</div></div>`;
-  el.innerHTML = `${'counted_short_pct' in d ? '' : rkStaleBanner}<div class="pagehead"><div><h1>My Ranking</h1><p class="muted" style="margin:4px 0 0">${esc(d.store)} · ${esc(d.circle)} Circle</p></div></div>
-    <div class="rk-grid">${big('Rank in your circle', d.circle_rank, d.circle_total, esc(d.circle) + ' Circle')}${big('Rank in India', d.pan_rank, d.pan_total, 'All stores')}</div>
-    <div class="kv kpi"><div class="g"><span>Total points</span><b>${rkPts(d.points)}</b></div><div><span>Cycles completed</span><b>${d.cycles_done} of ${d.cycles_held}</b></div><div><span>Short in transit <small>(not counted)</small></span><b>${rkPts(d.short_transit)}</b></div><div class="${d.short_other > 0 ? 'a' : ''}"><span>Short, other status <small>(counted)</small></span><b>${rkPts(d.short_other)}</b></div><div class="${rkCpct(d) > 0 ? 'a' : ''}"><span>Counted shortage %</span><b>${rkPct(rkCpct(d))}</b></div></div>
-    <div class="card" style="padding:18px;margin-top:6px"><b>Points by audit cycle</b>${d.cycles.length ? tbl(['Audit cycle', 'Status', 'Short (all)', 'In transit', 'Other status', 'Match rate (for points)', 'Points'], d.cycles.map(c => `<tr><td>${esc(c.name)}${c.status === 'ACTIVE' ? ' ' + badge('Open', 'info') : ''}</td><td>${c.done ? badge('Completed', 'ok') : badge('Not completed', 'bad')}</td>
-      <td>${c.done ? rkPts(c.short) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td><b>${rkPts(c.points)}</b></td></tr>`).join('')) : '<p class="muted">No audit cycle yet.</p>'}</div>${rkHow()}`;
+  const seasons = rkSeasons(), cur = seasons.find(s => s.live) || seasons[0];
+  const { data: d, error } = await sb.rpc('rank_my_store', rkWin(cur));
+  if (error || !d || !('level' in d)) { el.innerHTML = rkStaleBanner + '<div class="card startcard"><h2>Ranking is being updated</h2><p class="muted">Please refresh in a minute. If this stays, the database update above is still pending.</p></div>'; return; }
+  if (!d.ranked) { el.innerHTML = '<div class="card startcard"><h2>Ranking not available yet</h2><p class="muted">Your store is not part of the ranking.</p></div>'; return; }
+  const lvl = d.level || 'Unranked', lc = RK_LVL[lvl], none = !d.cycles_done;
+  const li = RK_LEVELS.indexOf(lvl), next = li >= 0 && li < RK_LEVELS.length - 1 ? RK_LEVELS[li + 1] : null;
+  const comp = d.cycles_held ? Math.round(1000 * d.cycles_done / d.cycles_held) / 10 : 0;
+  const medallion = `<span class="rk-medal" style="color:${lc};background:${lc}1f;border-color:${lc}55">${rkMedal(lvl, 30)}</span>`;
+  const rankCard = (icon, t, n, tot, sub) => `<div class="card rk-rc"><span class="rk-ric">${icon}</span><div><small>${t}</small><div class="rk-n">${none ? '—' : '#' + n}</div><div class="rk-sub">${none ? 'Complete your first audit of the season to get ranked' : sub + (tot ? ` · of ${tot}` : '')}</div></div></div>`;
+  const C = 2 * Math.PI * 26, off = C * (1 - (d.cycles_held ? d.cycles_done / d.cycles_held : 0));
+  const donut = `<svg class="rk-donut" width="72" height="72" viewBox="0 0 72 72"><circle cx="36" cy="36" r="26" fill="none" stroke="#E4EDE9" stroke-width="7"/><circle cx="36" cy="36" r="26" fill="none" stroke="#16A34A" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 36 36)"/><text x="36" y="34" text-anchor="middle" class="rk-dn">${d.cycles_done} / ${d.cycles_held}</text><text x="36" y="48" text-anchor="middle" class="rk-ds">Cycles</text></svg>`;
+  // Next-level card: the three gates (plus on-time for Champion), each with current vs required.
+  const gate = (label, nowTxt, ok, reqTxt) => `<div class="rk-gate"><span class="rk-gic ${ok ? 'ok' : 'no'}">${ok ? '✓' : '!'}</span><div class="rk-gm"><b>${nowTxt}</b><span>${label}</span></div><span class="rk-greq ${ok ? 'ok' : ''}">${reqTxt}</span></div>`;
+  let nextCard;
+  if (!next) nextCard = `<div class="card rk-next"><span class="rk-medal" style="color:${lc};background:${lc}1f;border-color:${lc}55">${rkMedal('Champion', 30)}</span><div class="rk-nm"><b>Top level: Champion 🏆</b><span>You hold the highest level this season. Defend it next season.</span></div></div>`;
+  else { const g = RK_GATES[next];
+    nextCard = `<div class="card rk-next"><span class="rk-medal" style="color:${RK_LVL[next]};background:${RK_LVL[next]}1f;border-color:${RK_LVL[next]}55">${rkMedal(next, 30)}</span>
+      <div class="rk-nm"><b>Next Level: ${next}</b><span>Complete more cycles and improve your performance to reach ${next}.</span></div>
+      <div class="rk-gates">${gate('Cycle Completion', comp + '%', d.cycles_held > 0 && comp >= g.comp, `≥ ${g.comp}% required`)}
+      ${gate('Match Rate', rkPct1(d.match_rate), d.match_rate != null && d.match_rate >= g.match, `≥ ${g.match}% required`)}
+      ${gate('Genuine Shortage', rkPct1(rkCpct(d)), rkCpct(d) != null && rkCpct(d) <= g.short, `≤ ${g.short}% required`)}
+      ${g.ontime ? gate('On-time Submission', d.late_count ? d.late_count + ' late' : 'All on time', !d.late_count, 'Every audit within its deadline') : ''}</div></div>`; }
+  el.innerHTML = `<div class="pagehead"><div><h1>My Ranking</h1><p class="muted" style="margin:4px 0 0">${esc(d.store)} · ${esc(d.circle)} Circle</p></div>
+    <div class="rk-stag"><span class="livepill"><i></i>Live Season</span><span class="rk-slab">${cur.label}</span><span class="muted">| ${d.cycles_held} cycle${d.cycles_held === 1 ? '' : 's'} so far</span></div></div>
+    <div class="rk-top4"><div class="card rk-lvl">${medallion}<div><small>Your Level</small><div class="rk-lname" style="color:${lc}">${lvl}</div>
+      <span class="rk-lpill">${next ? (lvl === 'Unranked' ? `Complete audits to earn ${next}` : `Keep improving to reach ${next}`) : 'Highest level reached'}</span></div></div>
+    ${rankCard(rkMedal('Champion', 20), 'Rank in Your Circle', d.circle_rank, d.circle_total, esc(d.circle) + ' Circle')}
+    ${rankCard('<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="13" width="5" height="8" rx="1.3"/><rect x="9.5" y="8" width="5" height="13" rx="1.3"/><rect x="16" y="3" width="5" height="18" rx="1.3"/></svg>', 'Rank in India', d.pan_rank, d.pan_total, 'All stores')}
+    <div class="card rk-pc">${donut}<div><small>Season Progress</small><div class="rk-pn">${comp}% completed</div><div class="bar2 rk-pbar"><i style="width:${comp}%"></i></div><div class="rk-sub">${d.cycles_held ? (d.cycles_held - d.cycles_done) + ' cycle' + (d.cycles_held - d.cycles_done === 1 ? '' : 's') + ' remaining' : 'No cycles yet this season'}</div></div></div></div>
+    <div class="kv kpi"><div class="g"><span>Total Points (This Season)</span><b>${rkPts(d.points)}</b></div><div><span>Match Rate</span><b>${rkPct1(d.match_rate)}</b></div><div class="${rkCpct(d) > 0 ? 'a' : ''}"><span>Genuine Shortage %</span><b>${rkPct(rkCpct(d))}</b></div><div><span>In Transit <small>(not counted)</small></span><b>${rkPts(d.short_transit)}</b></div><div class="${d.short_other > 0 ? 'a' : ''}"><span>Other Status <small>(counted)</small></span><b>${rkPts(d.short_other)}</b></div></div>
+    <div class="card" style="padding:18px;margin-top:6px"><b>Audit Performance (This Season)</b>${d.cycles.length ? tbl(['Audit cycle', 'Status', 'Short (all)', 'In transit', 'Other status', 'Match rate (for points)', 'Points'], d.cycles.map(c => `<tr><td>${esc(c.name)}${c.status === 'ACTIVE' ? ' ' + badge('Open', 'info') : ''}</td><td>${c.done ? badge('Completed', 'ok') : badge('Not completed', 'bad')}</td>
+      <td>${c.done ? rkPts(c.short) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td><b>${rkPts(c.points)}</b></td></tr>`).join('')) : '<p class="muted">No audit cycle yet this season.</p>'}</div>${nextCard}${rkHow()}`;
 };
 
 // ---- a table over already-loaded rows: click a heading to sort (A to Z / Z to A, low to high / high to low). No filters. ----
@@ -51,28 +104,37 @@ const rkSortClick = (e, S, redraw) => { const h = e.target.closest('[data-sort]'
   S.sort = !S.sort || S.sort.k !== k ? { k, dir: 'asc' } : S.sort.dir === 'asc' ? { k, dir: 'desc' } : null; redraw(); };
 
 async function rankStaff(el) {
-  const { data: d, error } = await sb.rpc('rank_staff'); if (error) throw error;
-  const admin = d.role === 'ADMIN', stores = d.stores || [], circles = d.circles || [];
+  const seasons = rkSeasons(); let si = Math.max(0, seasons.findIndex(s => s.live));
+  const first = await sb.rpc('rank_staff', rkWin(seasons[si]));
+  if (first.error || !first.data) { el.innerHTML = rkStaleBanner + '<div class="card startcard"><h2>Ranking is being updated</h2><p class="muted">Please refresh in a minute. If this stays, the database update above is still pending.</p></div>'; return; }
+  let d = first.data; const admin = d.role === 'ADMIN';
+  let stores = [], circles = [], cs = [], top3 = [];
+  const apply = () => { stores = d.stores || []; circles = d.circles || []; cs = [...new Set(stores.map(s => s.circle))].sort();
+    top3 = admin ? stores.filter(s => s.cycles_done > 0).sort((a, b) => a.pan_rank - b.pan_rank || String(a.code).localeCompare(String(b.code))).slice(0, 3) : []; };
+  apply();
+  const load = async () => { const r = await sb.rpc('rank_staff', rkWin(seasons[si])); if (r.error) throw r.error; d = r.data; apply(); };
   const tabs = admin ? [['stores', 'Stores (India)', 'store'], ['circles', 'Circles', 'grid'], ['top', 'Top store of each circle', 'trophy']]
     : [['stores', 'Stores', 'store'], ['circles', circles.length > 1 ? 'My circles' : 'My circle', 'grid']];
-  const F = { tab: 'stores', q: '', c: '', page: 1, ps: 10 }, ranked = s => s.cycles_done > 0, cs = [...new Set(stores.map(s => s.circle))].sort();
-  // Pan-India Top 3 (admin only): the three best-ranked stores across all circles
-  const top3 = admin ? stores.filter(ranked).sort((a, b) => a.pan_rank - b.pan_rank || String(a.code).localeCompare(String(b.code))).slice(0, 3) : [];
+  const F = { tab: 'stores', q: '', c: '', page: 1, ps: 10 }, ranked = s => s.cycles_done > 0;
+  // Pan-India Top 3 (admin only): wide cards with level chips + season stats (design module, Oct 2026)
   const crown = r => `<svg class="crown c${r}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M2.8 7.2 7.2 10.8l4.8-6 4.8 6 4.4-3.6-2 10.8H4.8z"/><rect x="4.8" y="19" width="14.4" height="2" rx="1"/></svg>`;
-  const topCard = (s, r) => `<div class="rpc2 w${r}">${crown(r)}<span class="rk r${r}">${r}</span><div class="rpc2-store"><b>${esc(s.code)}</b><span>${esc(s.name)}</span></div><span class="rpc2-circle">${esc(s.circle)}</span><div class="rpc2-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>`;
-  const podium = top3.length ? `<section class="rkpod2"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores <small>Pan India (Current Cycle)</small></b><span>Based on total points</span></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp2-row">${top3.map((s, i) => topCard(s, i + 1)).join('')}</div></section>` : '';
+  const topCard3 = (s, r) => `<div class="rpc3 w${r}">${crown(r)}<div class="rpc3-main"><span class="rkmedal m${r}">${r}</span>
+    <div class="rpc3-store"><b>${esc(s.code)}</b><span>${esc(s.name)} (${esc(s.circle)})</span><span>${rkLvlChip(s.level)}</span></div>
+    <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>
+    <div class="rpc3-stats"><div><span>India Rank</span><b>#${s.pan_rank}</b></div><div><span>Circle Rank</span><b>#${s.circle_rank}</b></div><div><span>Cycles</span><b>${s.cycles_done}/${s.cycles_held}</b></div><div><span>Match Rate</span><b>${rkPct1(s.match_rate)}</b></div><div><span>Genuine Shortage</span><b>${rkPct1(rkCpct(s))}</b></div></div></div>`;
+  const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b><span>Based on total points this season</span></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
   const SC = [
-    { k: 'circle_rank', w: 7, l: 'Rank (Circle)', t: 'num', get: s => s.circle_rank, cell: s => rkPill(s.circle_rank, ranked(s)) },
-    { k: 'pan_rank', w: 7, l: 'Rank (India)', t: 'num', get: s => s.pan_rank, cell: s => rkPill(s.pan_rank, ranked(s)) },
-    { k: 'store', w: 16, l: 'Store', t: 'text', get: s => s.code + ' ' + s.name, cell: s => `<b>${esc(s.code)}</b><div class="muted" style="font-size:12px">${esc(s.name)}</div>` },
+    { k: 'pan_rank', w: 6, l: '# (India)', t: 'num', get: s => s.pan_rank, cell: s => ranked(s) ? `<b>${s.pan_rank}</b>` : '—' },
+    { k: 'circle_rank', w: 6, l: '# (Circle)', t: 'num', get: s => s.circle_rank, cell: s => ranked(s) ? `<b${s.circle_rank <= 3 ? ' class="rk-red"' : ''}>${s.circle_rank}</b>` : '—' },
+    { k: 'store', w: 17, l: 'Store', t: 'text', get: s => s.code + ' ' + s.name, cell: s => `<b>${esc(s.code)}</b><div class="muted" style="font-size:12px">${esc(s.name)}</div>` },
     { k: 'circle', w: 6, l: 'Circle', t: 'text', get: s => s.circle, cell: s => esc(s.circle) },
+    { k: 'level', w: 10, l: 'Level', t: 'text', get: s => s.level || 'Unranked', cell: s => rkLvlChip(s.level) },
     { k: 'points', w: 7, l: 'Points', t: 'num', get: s => s.points, cell: s => `<b>${rkPts(s.points)}</b>` },
-    { k: 'cycles_done', w: 8, l: 'Cycles done', t: 'num', get: s => s.cycles_done, cell: s => `${s.cycles_done} of ${s.cycles_held}` },
-    { k: 'short', w: 8, l: 'Short (all)', t: 'num', get: s => s.short, cell: s => rkPts(s.short) },
-    { k: 'short_transit', w: 8, l: 'In transit', t: 'num', get: s => s.short_transit, cell: s => rkPts(s.short_transit) },
-    { k: 'short_other', w: 8, l: 'Other status', t: 'num', get: s => s.short_other, cell: s => rkPts(s.short_other) },
-    { k: 'counted_short_pct', w: 11, l: 'Counted shortage %', t: 'num', get: s => rkCpct(s), cell: s => rkPct(rkCpct(s)) },
-    { k: 'go', w: 14, l: 'Action', ns: true, t: 'text', get: () => '', cell: s => `<span class="rk-act"><a class="rk-view" href="#/storedetail?s=${s.id}&from=ranking">${ic('eye', 14)} View</a><span class="rk-dw"><button type="button" class="rk-dots" data-dot="${s.id}" title="More actions">&#8942;</button><span class="rk-dmenu" hidden><a href="#/storedetail?s=${s.id}&from=ranking">View audit detail</a></span></span></span>` }];
+    { k: 'cycles_done', w: 9, l: 'Cycles', t: 'num', get: s => s.cycles_done, cell: s => `<div class="rk-cyc"><span>${s.cycles_done} / ${s.cycles_held}</span><span class="rk-cbar"><i style="width:${s.cycles_held ? 100 * s.cycles_done / s.cycles_held : 0}%"></i></span></div>` },
+    { k: 'match_rate', w: 8, l: 'Match Rate', t: 'num', get: s => s.match_rate, cell: s => rkPct1(s.match_rate) },
+    { k: 'short_transit', w: 8, l: 'In Transit', t: 'num', get: s => s.short_transit, cell: s => rkPts(s.short_transit) },
+    { k: 'counted_short_pct', w: 10, l: 'Genuine Shortage %', t: 'num', get: s => rkCpct(s), cell: s => rkPct(rkCpct(s)) },
+    { k: 'go', w: 13, l: 'Action', ns: true, t: 'text', get: () => '', cell: s => `<span class="rk-act"><a class="rk-view" href="#/storedetail?s=${s.id}&from=ranking">${ic('eye', 14)} View</a><span class="rk-dw"><button type="button" class="rk-dots" data-dot="${s.id}" title="More actions">&#8942;</button><span class="rk-dmenu" hidden><a href="#/storedetail?s=${s.id}&from=ranking">View audit detail</a></span></span></span>` }];
   const CC = [
     { k: 'circle_rank', w: 9, l: 'Circle rank', t: 'num', get: c => c.circle_rank, cell: c => rkPill(c.circle_rank, c.cycles_done > 0) },
     { k: 'circle', w: 10, l: 'Circle', t: 'text', get: c => c.circle, cell: c => `<b>${esc(c.circle)}</b>` },
@@ -89,11 +151,11 @@ async function rankStaff(el) {
   async function exportRanking() {
     if (!lastRows.length) { toast('Nothing to export.', 'warn'); return; }
     try { await loadXlsx(); } catch (e) { toast(e.message || 'Could not load the Excel library.', 'err'); return; }
-    const data = lastRows.map(s => ({ 'Rank in circle': ranked(s) ? s.circle_rank : '—', 'Rank in India': ranked(s) ? s.pan_rank : '—', 'Store code': s.code, 'Store name': s.name, 'Circle': s.circle, 'Points': Number(s.points || 0), 'Cycles done': `${s.cycles_done} of ${s.cycles_held}`, 'Short (all)': Number(s.short || 0), 'In transit': Number(s.short_transit || 0), 'Other status': Number(s.short_other || 0), 'Counted shortage %': rkCpct(s) == null ? '' : Number(rkCpct(s)) }));
+    const data = lastRows.map(s => ({ 'Rank in India': ranked(s) ? s.pan_rank : '—', 'Rank in circle': ranked(s) ? s.circle_rank : '—', 'Store code': s.code, 'Store name': s.name, 'Circle': s.circle, 'Level': s.level || 'Unranked', 'Points': Number(s.points || 0), 'Cycles': `${s.cycles_done} of ${s.cycles_held}`, 'Match rate %': s.match_rate == null ? '' : Number(s.match_rate), 'Short (all)': Number(s.short || 0), 'In transit': Number(s.short_transit || 0), 'Other status': Number(s.short_other || 0), 'Genuine shortage %': rkCpct(s) == null ? '' : Number(rkCpct(s)) }));
     const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Ranking');
     const dd = new Date(), ymd = dd.getFullYear() + String(dd.getMonth() + 1).padStart(2, '0') + String(dd.getDate()).padStart(2, '0');
-    XLSX.writeFile(wb, `Ranking_${slug(S.cycleName)}_${ymd}.xlsx`);
+    XLSX.writeFile(wb, `Ranking_${slug(seasons[si].label)}_${ymd}.xlsx`);
     toast(`Downloaded ${lastRows.length} store(s).`, 'ok');
   }
 // ---- small inline icons for the top-store card (original design, unchanged) ----
@@ -110,8 +172,11 @@ const rkTopCard = (c, s) => `<div class="tcard">
   <div class="tc-pts"><span class="tc-trophy">${RK_ICON.trophy}</span><div><small>Earned Points</small><b>${rkPts(c.top_points)} pts</b></div></div>
   <div class="tc-ranks"><div class="tc-r blue"><span>${RK_ICON.bars}</span><div><small>India Rank</small><b>${s ? '#' + s.pan_rank : '—'}</b></div></div>
     <div class="tc-r amber"><span>${RK_ICON.crown}</span><div><small>Circle Rank</small><b>${s ? '#' + s.circle_rank : '#1'}</b></div></div></div></div>`;
-  el.innerHTML = `${stores.length && !('counted_short_pct' in stores[0]) ? rkStaleBanner : ''}<div class="tabs seg rk-tabs" id="rk-tabs" style="margin-bottom:12px">${tabs.map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''}" data-t="${t[0]}">${ic(t[2], 16)}<span>${t[1]}</span></button>`).join('')}</div><div id="rk-body"></div>`;
+  el.innerHTML = `${stores.length && !('level' in stores[0]) ? rkStaleBanner : ''}<div class="pagehead rk-phead"><div><h1>Ranking</h1><p class="muted" id="rk-sub" style="margin:4px 0 0"></p></div>
+    <div class="rk-sctrl"><label for="rk-season">Season</label><select id="rk-season">${seasons.map((s, i) => `<option value="${i}" ${i === si ? 'selected' : ''}>${s.label}</option>`).join('')}</select><span id="rk-live"></span></div></div>
+    <div class="tabs seg rk-tabs" id="rk-tabs" style="margin-bottom:12px">${tabs.map(t => `<button class="tab ${t[0] === F.tab ? 'on' : ''}" data-t="${t[0]}">${ic(t[2], 16)}<span>${t[1]}</span></button>`).join('')}</div><div id="rk-body"></div>`;
   const body = el.querySelector('#rk-body');
+  el.querySelector('#rk-season').onchange = async e => { si = +e.target.value; F.page = 1; F.c = ''; F.q = ''; try { await load(); } catch (err) { toast(rpcMsg(err), 'err'); return; } draw(); };
   const pager = (total, pages) => {
     if (!total) return '';
     const from = (F.page - 1) * F.ps + 1, to = Math.min(total, F.page * F.ps);
@@ -122,6 +187,9 @@ const rkTopCard = (c, s) => `<div class="tcard">
   };
   const draw = () => {
     el.querySelectorAll('#rk-tabs .tab').forEach(b => b.classList.toggle('on', b.dataset.t === F.tab));
+    const sub = el.querySelector('#rk-sub'), lv = el.querySelector('#rk-live');
+    if (sub) sub.textContent = seasons[si].live ? 'Store and circle ranking for the current season' : `Final store and circle ranking · ${seasons[si].label}`;
+    if (lv) lv.innerHTML = seasons[si].live ? '<span class="livepill"><i></i>Live Season</span>' : '<span class="rk-ended">Season ended</span>';
     if (F.tab === 'circles') {
       body.innerHTML = `<div class="card" style="padding:16px">${circles.length ? rkGrid(CC, circles, CS, 'No circles.') : '<p class="muted">No circles.</p>'}</div>${rkHow()}`;
       body.onclick = e => rkSortClick(e, CS, draw);
@@ -137,13 +205,25 @@ const rkTopCard = (c, s) => `<div class="tcard">
       if (!admin) rows = rows.slice().sort((a, b) => a.circle.localeCompare(b.circle) || a.circle_rank - b.circle_rank || a.code.localeCompare(b.code));
       rows = rkSorted(SC, rows, SS);
       lastRows = rows;
-      const pages = Math.max(1, Math.ceil(rows.length / F.ps));
+      // Season summary cards: where the visible stores stand this season.
+      const nT = stores.length, nC = stores.filter(s => s.cycles_held > 0 && s.cycles_done >= s.cycles_held).length,
+        nP = stores.filter(s => s.cycles_done > 0 && s.cycles_done < s.cycles_held).length, nN = stores.filter(s => !s.cycles_done).length;
+      const pctOf = n => nT ? (Math.round(1000 * n / nT) / 10) + '%' : '—';
+      const stat = (cls, icon, val, label, foot, barPct) => `<div class="card rk-stat"><span class="rk-ric ${cls}">${icon}</span><div class="rk-sm"><div class="rk-sv">${val}</div><small>${label}</small>${foot ? `<div class="rk-ss">${foot}</div>` : ''}${barPct != null ? `<div class="bar2 rk-sbar ${cls}"><i style="width:${barPct}%"></i></div>` : ''}</div></div>`;
+      const stats = `<div class="rk-stats">${stat('b', ic('store', 19), nT.toLocaleString('en-IN'), 'Total Stores', '', null)}
+        ${stat('g', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" opacity=".18"/><path d="M8.5 12.5l2.4 2.4L15.7 9.6"/></svg>', pctOf(nC), 'Completed', `${nC.toLocaleString('en-IN')} / ${nT.toLocaleString('en-IN')} stores`, nT ? 100 * nC / nT : 0)}
+        ${stat('a', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>', pctOf(nP), 'In Progress', `${nP.toLocaleString('en-IN')} / ${nT.toLocaleString('en-IN')} stores`, nT ? 100 * nP / nT : 0)}
+        ${stat('gr', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>', pctOf(nN), 'Not Started', `${nN.toLocaleString('en-IN')} / ${nT.toLocaleString('en-IN')} stores`, nT ? 100 * nN / nT : 0)}</div>`;
+      // With the Top 3 shown above and no filter/search/sort active, the table starts at rank 4 (design module).
+      const excl = admin && top3.length > 0 && !F.c && !q && !SS.sort;
+      const tRows = excl ? rows.filter(s => !top3.some(t => t.id === s.id)) : rows;
+      const pages = Math.max(1, Math.ceil(tRows.length / F.ps));
       if (F.page > pages) F.page = pages;
-      const pageRows = rows.slice((F.page - 1) * F.ps, F.page * F.ps);
-      body.innerHTML = `<div class="rk-frow"><div class="rk-fc"><label>Circle</label><select id="rk-c"><option value="">All circles</option>${cs.map(c => `<option ${c === F.c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+      const pageRows = tRows.slice((F.page - 1) * F.ps, F.page * F.ps);
+      body.innerHTML = `${stats}<div class="rk-frow"><div class="rk-fc"><label>Circle</label><select id="rk-c"><option value="">All circles</option>${cs.map(c => `<option ${c === F.c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
         <div class="rk-fs"><label>Search store</label><div class="rk-swrap">${ic('search', 15)}<input id="rk-q" placeholder="Search store code or name..." value="${esc(F.q)}"></div></div>
         <div class="rk-fe"><label>&nbsp;</label><div class="rk-dd"><button type="button" class="btn" id="rk-exp">${ic('dl', 15)} Export</button><div class="rk-dmenu" id="rk-expmenu" hidden><button type="button" id="rk-expx">Excel (.xlsx)</button></div></div></div></div>
-        ${podium}<div class="card" id="rk-table" style="padding:16px">${rkGrid(SC, pageRows, SS, 'No stores match.')}</div>${pager(rows.length, pages)}${rkHow()}`;
+        ${podium()}<div class="rk-tt"><b>${excl ? 'All Stores (Starting from Rank 4)' : 'All Stores'}</b>${excl ? '<span class="muted">Top 3 stores are shown above</span>' : ''}</div><div class="card" id="rk-table" style="padding:16px">${rkGrid(SC, pageRows, SS, 'No stores match.')}</div>${pager(tRows.length, pages)}${rkHow()}`;
       body.onclick = e => {
         const t = e.target;
         const pg = t.closest('[data-pg]');
