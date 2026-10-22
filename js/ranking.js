@@ -37,7 +37,7 @@ const rkHow = () => `<details class="rk-how"><summary>How points & levels work</
   <p><b>Seasons.</b> Ranking runs in 3-month seasons (calendar quarters: Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec). Only audit cycles of the season count, so every season starts fresh and a finished season's result never changes.</p>
   <p><b>Points.</b> For every cycle of the season your store <b>completes</b> you earn <b>20 points for taking part</b> plus <b>your match rate</b> (up to 100 points). A cycle you do not complete earns 0.</p>
   <p><b>In-transit shortage is shown separately.</b> Your audit result still shows every short item as it is. For the ranking, shortage on items whose Inventory_Status is In Transit (already moved out of the store) is displayed on its own and does not lower your match rate: the match rate used for points is your matched stock measured against the shortage of all <b>other</b> statuses (the "genuine" shortage). Genuine shortage is what affects your performance.</p>
-  <p><b>Levels.</b> Points alone are not enough — a level also needs quality: Bronze ≥ 50% of the season's cycles completed, match ≥ 85%, genuine shortage ≤ 8% · Silver ≥ 65%, ≥ 90%, ≤ 5% · Gold ≥ 80%, ≥ 97%, ≤ 2% · Platinum ≥ 90%, ≥ 98%, ≤ 1.5% · Diamond 100%, ≥ 99%, ≤ 0.5% · Champion 100%, match above 99%, ≤ 0.05% and every audit submitted within its deadline.</p>
+  <p><b>Levels.</b> Points alone are not enough — a level also needs quality: Bronze ≥ 50% of the season's cycles completed, match ≥ 85%, genuine shortage ≤ 8% · Silver ≥ 65%, ≥ 90%, ≤ 5% · Gold ≥ 80%, ≥ 97%, ≤ 2% · Platinum ≥ 90%, ≥ 98%, ≤ 1.5% · Diamond 100%, ≥ 99%, ≤ 0.5% · Champion 100%, match above 99%, ≤ 0.05% and every audit submitted within its deadline. The points target on the level card is a live benchmark — the lowest points held by any store at the next level this season (estimated from the level criteria when no store holds that level yet). The level itself is always decided by the targets.</p>
   <p><b>Ranks.</b> Your rank is based on total points of the season. If stores have the same points, the one with the <b>lower genuine shortage %</b> ranks higher. Ranks run 1, 2, 3 without gaps: if two stores share rank 1, the next store is rank 2. Circles are ranked on the <b>average points per store</b>, so big and small circles compare fairly.</p></details>`;
 
 PAGES.ranking = async el => {
@@ -58,6 +58,17 @@ PAGES.ranking = async el => {
     const sR = cpct == null ? 0 : cpct <= 0 ? 1 : Math.min(1, g.short / cpct);
     met = (d.cycles_held > 0 && comp >= g.comp ? 1 : 0) + (d.match_rate != null && (g.matchGt ? d.match_rate > g.match : d.match_rate >= g.match) ? 1 : 0) + (cpct != null && cpct <= g.short ? 1 : 0);
     gp = Math.round(100 * (cR + mR + sR) / 3); }
+  // Points benchmark for the next level: the lowest points held by any store at that
+  // level this season (server: level_points). If no store holds it yet, estimate the
+  // target from the level criteria: cycles held x (20 + the gate's match %).
+  const lp = d.level_points || {};
+  let bench = null;
+  if (next) bench = lp[next] != null ? { target: Number(lp[next]), est: false } : { target: Math.round(d.cycles_held * (20 + RK_GATES[next].match)), est: true };
+  const bPct = bench && bench.target > 0 ? Math.min(100, Math.round(1000 * Number(d.points || 0) / bench.target) / 10) : 0;
+  const bLeft = bench ? bench.target - Number(d.points || 0) : 0;
+  const benchMeta = !bench || bench.target <= 0
+    ? `<span>${rkPts(d.points)} points this season</span><span class="rk-lnext">Next: ${next} ${rkMedal(next, 12)}</span>`
+    : `<span><b>${rkPts(d.points)}</b> / ${rkPts(bench.target)} points${bench.est ? ' <span class="muted">(estimated target)</span>' : ''}</span><span class="rk-lnext">${bLeft > 0 ? rkPts(bLeft) + ' points to ' + next : 'Benchmark reached ✓'}</span>`;
   const medallion = `<span class="rk-medal" style="color:${lc};background:${lc}1f;border-color:${lc}55">${rkMedal(lvl, 30)}</span>`;
   const icoTrophy = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>';
   const icoTarget = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>';
@@ -66,10 +77,9 @@ PAGES.ranking = async el => {
   const donut = `<svg class="rk-donut" width="72" height="72" viewBox="0 0 72 72"><circle cx="36" cy="36" r="26" fill="none" stroke="#E4EDE9" stroke-width="7"/><circle cx="36" cy="36" r="26" fill="none" stroke="#16A34A" stroke-width="7" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 36 36)"/><text x="36" y="34" text-anchor="middle" class="rk-dn">${d.cycles_done} / ${d.cycles_held}</text><text x="36" y="48" text-anchor="middle" class="rk-ds">Cycles</text></svg>`;
   // Level card: current level, season points, target progress to the next level (or top-tier state).
   const lvlCard = next ? `<div class="card rk-lvl">${medallion}<div class="rk-lm"><small>Current Level</small><div class="rk-lname" style="color:${lc}">${lvl}</div>
-      <div class="rk-lpts">${rkPts(d.points)} points this season</div>
-      <div class="bar2 rk-lbar"><i style="width:${gp}%;background:${RK_LVL[next]}"></i></div>
-      <div class="rk-lmeta"><span>${met} of 3 targets met for ${next}</span><span class="rk-lnext">Next: ${next} ${rkMedal(next, 12)}</span></div>
-      <div class="rk-ltip">Reach ${next}: complete ≥ ${RK_GATES[next].comp}% of cycles · match ${RK_GATES[next].matchGt ? 'above' : '≥'} ${RK_GATES[next].match}% · genuine shortage ≤ ${RK_GATES[next].short}%${RK_GATES[next].ontime ? ' · submit every audit on time' : ''}</div></div></div>`
+      <div class="bar2 rk-lbar"><i style="width:${bPct}%;background:${RK_LVL[next]}"></i></div>
+      <div class="rk-lmeta">${benchMeta}</div>
+      <div class="rk-ltip">${met} of 3 targets met for ${next} · complete ≥ ${RK_GATES[next].comp}% of cycles · match ${RK_GATES[next].matchGt ? 'above' : '≥'} ${RK_GATES[next].match}% · genuine shortage ≤ ${RK_GATES[next].short}%${RK_GATES[next].ontime ? ' · submit every audit on time' : ''}</div></div></div>`
     : `<div class="card rk-lvl">${medallion}<div class="rk-lm"><small>Current Level</small><div class="rk-lname" style="color:${lc}">🏆 Champion — Highest Tier</div>
       <div class="rk-lpts">${rkPts(d.points)} points this season</div><div class="rk-ltip">You hold the highest level this season. Defend it next season.</div></div></div>`;
   // KPI row (icon + label + value; shortage types stay separate, in units).
