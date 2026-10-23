@@ -514,7 +514,7 @@ async function resultView(el, sid, embedded) {
     const t = q.replace(/[,()%*\\]/g, ' ').trim(); if (t) qb = qb.or(`item_code.ilike.*${t}*,item_sno.ilike.*${t}*,item_description.ilike.*${t}*`);
     qb = CF.apply(qb);
     const { data, error, count } = await qb.order('item_code').order('item_sno').range(page * PS, page * PS + PS - 1);
-    if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))} <button type="button" class="btn sm" data-retry style="margin-left:8px">Retry</button></div>`; return; }
+    if (error) { rt.innerHTML = `<div class="alert err">${esc(friendlyError(error))} <button type="button" class="btn sm" data-retry style="margin-left:8px">Retry</button><div class="muted" style="margin-top:6px;font-size:12px">Detail [${tab}]: ${esc([error.code, error.message, error.details, error.hint].filter(Boolean).join(' · ') || 'unknown error')}</div></div>`; return; }
     rows = data;
     const rbox = (r, i) => { if (!rmkOk || r.result !== 'SHORT') return ''; const e = rmk[rkey(r)];
       if (revDb && cats) {           // structured revision UI (database/32)
