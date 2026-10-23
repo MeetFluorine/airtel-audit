@@ -103,8 +103,18 @@ function scanner(el, c) {
     <aside class="aud-side"><div class="card" style="padding:16px"><div class="bar" style="margin-bottom:6px"><b>Audit progress</b><span id="net"></span></div>
         <div class="kv"><div><span>Serialized</span><b id="c-ser">0</b></div><div><span>Non-serialized</span><b id="c-ent">0</b></div><div><span>Total units</span><b id="c-units">0</b></div></div><div class="sync" id="sync"></div><div class="ckmini" id="ck-side"></div></div>
       <div class="card" style="padding:16px;margin-top:14px"><div class="cardhead"><b>Recent Scans</b><a href="#/audit?view=preview">View All ${ic('arrow', 14)}</a></div><div id="recent" class="muted">Nothing yet</div></div></aside></div>
-    <div class="bar" style="margin-top:16px"><span></span><a class="btn yel" href="#/audit?view=preview" style="padding:13px 22px">Preview &amp; complete audit ${ic('arrow', 18)}</a></div>`;
+    <div class="bar" style="margin-top:16px"><span></span><div class="row"><a class="btn" href="#/audit?view=preview" style="padding:13px 22px">${ic('eye', 18)} Preview</a><button class="btn yel" id="btn-complete" style="padding:13px 24px">${ic('lock', 18)} Complete Audit</button></div></div>`;
   const $ = id => el.querySelector('#' + id), scan = $('scan');
+  $('btn-complete').onclick = async e => {
+    const b = e.currentTarget;
+    if (Q.items.length) { toast('Some entries are still syncing. Please wait for sync to finish, then complete the audit.', 'err'); return; }
+    b.disabled = true;
+    try {
+      const { data, error } = await sb.rpc('session_preview', { p_session: sid, p_type: 'ALL', p_search: null, p_offset: 0, p_limit: 1 });
+      if (error) throw error;
+      completeAudit(sid, data.counts);
+    } catch (x) { toast(rpcMsg(x), 'err'); } finally { b.disabled = false; }
+  };
   const showRes = (id, kind, title, body) => { const r = $(id); r.className = 'resp ' + kind; r.innerHTML = `<div class="rt">${title}</div>${body || ''}`; };
   const rg = rows => '<div class="rg">' + rows.filter(r => r[1]).map(r => `<span>${r[0]}</span><b>${esc(r[1])}</b>`).join('') + '</div>';
   function paint() {
@@ -327,6 +337,20 @@ function scanner(el, c) {
   paint(); scan.focus(); Q.pump();
 }
 
+/* ---- complete & lock (opened by the audit screen's Complete Audit button) ---- */
+function completeAudit(sid, cn) {
+  const o = openModal('', `<span class="lockic">${ic('lock', 40, 1.6)}</span><h3 style="font-size:22px">Complete &amp; Lock Audit?</h3><p class="muted">Once submitted, this audit will be locked.<br>You will not be able to add, remove or modify items.<br>Only an authorized administrator can reopen it.</p>
+      <div class="kv" style="text-align:left"><div><span>Serialized scans</span><b>${fn(cn.serial)}</b></div><div><span>Non-serialized entries</span><b>${fn(cn.entries)}</b></div><div><span>Total physical units</span><b>${fn(cn.units)}</b></div></div>
+      <label class="chk" style="justify-content:center"><input type="checkbox" id="m_ok"> I confirm that the physical stock count is complete.</label>`,
+    [cancelBtn, { label: 'Submit & Lock Audit', cls: 'yel', fn: async () => {
+      if (Q.items.length) { toast('Some entries are still syncing. Please wait and try again.', 'err'); return false; }
+      const ov = document.createElement('div'); ov.className = 'syncov'; ov.innerHTML = loadingView('sync'); document.body.appendChild(ov);
+      try { const { error } = await sb.rpc('submit_audit', { p_session: sid }); if (error) throw error; } finally { ov.remove(); }
+      try { localStorage.removeItem('sfx_q_' + sid); } catch (e) {} Q.items = [];
+      toast('Audit submitted and locked.', 'ok'); location.hash = '#/result'; } }]);
+  o.querySelector('.mdl').classList.add('center'); const go = o.querySelector('.ma .yel'); go.disabled = true; o.querySelector('#m_ok').onchange = e => (go.disabled = !e.target.checked);
+}
+
 /* ---- preview ---- */
 function preview(el, c) {
   const sid = c.session.id, PS = 50; let type = 'ALL', q = '', page = 0, timer = null, last = null;
@@ -347,22 +371,8 @@ function preview(el, c) {
         <div class="inp" style="min-width:300px">${ic('search', 18)}<input id="q" placeholder="Search by item code, description or serial..." value="${esc(q)}"></div></div>
       ${tbl(['#', 'Item_Code', 'Inventory_Status', 'Item_Description', 'UoM', 'Qty', 'Quality', 'Serial Number', 'Type', 'Action'], rows)}
       <div class="bar"><span class="muted">${fn(d.total)} row(s)</span><div class="row"><button class="btn sm" data-pg="-1" ${page ? '' : 'disabled'}>Previous</button><button class="btn sm" data-pg="1" ${(page + 1) * PS < d.total ? '' : 'disabled'}>Next</button></div></div>
-      <div class="bar" style="margin-top:8px"><a class="btn" href="#/audit" style="padding:13px 22px">${ic('back', 16)} Back to Audit</a><button class="btn yel" id="done" style="padding:13px 24px" ${pend ? 'disabled' : ''}>Complete Audit ${ic('arrow', 18)}</button></div>`;
+      <div class="bar" style="margin-top:8px"><a class="btn" href="#/audit" style="padding:13px 22px">${ic('back', 16)} Back to Audit</a><span class="muted">To finish, use the <b>Complete Audit</b> button on the audit screen.</span></div>`;
     el.querySelector('#q').oninput = e => { clearTimeout(timer); const v = e.target.value.trim(); timer = setTimeout(() => { q = v; page = 0; load(); }, 300); };
-    el.querySelector('#done').onclick = complete;
-  }
-  function complete() {
-    const cn = last.counts;
-    const o = openModal('', `<span class="lockic">${ic('lock', 40, 1.6)}</span><h3 style="font-size:22px">Complete &amp; Lock Audit?</h3><p class="muted">Once submitted, this audit will be locked.<br>You will not be able to add, remove or modify items.<br>Only an authorized administrator can reopen it.</p>
-      <div class="kv" style="text-align:left"><div><span>Serialized scans</span><b>${fn(cn.serial)}</b></div><div><span>Non-serialized entries</span><b>${fn(cn.entries)}</b></div><div><span>Total physical units</span><b>${fn(cn.units)}</b></div></div>
-      <label class="chk" style="justify-content:center"><input type="checkbox" id="m_ok"> I confirm that the physical stock count is complete.</label>`,
-      [cancelBtn, { label: 'Submit & Lock Audit', cls: 'yel', fn: async () => {
-        if (Q.items.length) { toast('Some entries are still syncing. Please wait and try again.', 'err'); return false; }
-        const ov = document.createElement('div'); ov.className = 'syncov'; ov.innerHTML = loadingView('sync'); document.body.appendChild(ov);
-        try { const { error } = await sb.rpc('submit_audit', { p_session: sid }); if (error) throw error; } finally { ov.remove(); }
-        try { localStorage.removeItem('sfx_q_' + sid); } catch (e) {} Q.items = [];
-        toast('Audit submitted and locked.', 'ok'); location.hash = '#/result'; } }]);
-    o.querySelector('.mdl').classList.add('center'); const go = o.querySelector('.ma .yel'); go.disabled = true; o.querySelector('#m_ok').onchange = e => (go.disabled = !e.target.checked);
   }
   el.onclick = async e => {
     const t = e.target.closest('[data-ty]'); if (t) { type = t.dataset.ty; page = 0; return load(); }
