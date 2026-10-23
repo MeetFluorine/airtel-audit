@@ -317,3 +317,10 @@
 .rpc3-pts{padding-right:26px}
 .rk-ps select{appearance:none;-webkit-appearance:none;border:1.5px solid #C9D4CE;border-radius:8px;background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%235B6B62' stroke-width='1.8' fill='none' stroke-linecap='round'/></svg>") no-repeat right 9px center;padding:6px 27px 6px 10px;font-weight:700;color:#123;cursor:pointer}
 .rk-ps select:focus{outline:none;border-color:#0B3D2E;box-shadow:0 0 0 3px #F5B30133}
+
+/* Bonus award counts (migration 36): One-Shot / Clean Sweep season counts */
+.rk-bonus{display:inline-flex;gap:5px;vertical-align:middle}
+.rk-bonus>span{background:#EEF4F0;border:1px solid #D8E4DC;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:700;color:#33513F;white-space:nowrap}
+.rk-btag{display:inline-block;border-radius:999px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.rk-btag.os{background:#E7F6EC;color:#12805C;border:1px solid #BEE7CB}
+.rk-btag.cs{background:#E8F1FE;color:#1D4ED8;border:1px solid #C3D9FB}

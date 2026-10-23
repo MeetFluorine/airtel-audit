@@ -33,9 +33,13 @@ const rkMedal = (lvl, sz = 13) => lvl === 'Champion'
   : `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.1 1.1-6.5L2.6 9.4l6.5-.9z"/></svg>`;
 const rkLvlChip = l => { l = l || 'Unranked'; const c = RK_LVL[l] || RK_LVL.Unranked;
   return `<span class="lvl" style="color:${c};background:${c}1f">${rkMedal(l)} ${l}</span>` };
+// Season bonus counts (migration 36): 🎯 One-Shot cycles, 🧹 Clean Sweep cycles.
+const rkBonusChips = s => { const o = Number((s && s.oneshot) || 0), c = Number((s && s.cleansweep) || 0);
+  return (o || c) ? `<span class="rk-bonus">${o ? `<span title="One-Shot cycles this season — submitted with zero shortage, never reopened">🎯×${o}</span>` : ''}${c ? `<span title="Clean Sweep cycles this season — shortage fully explained and accepted, closed at zero">🧹×${c}</span>` : ''}</span>` : ''; };
 const rkHow = () => `<details class="rk-how"><summary>How points & levels work</summary>
   <p><b>Seasons.</b> Ranking runs in 3-month seasons (calendar quarters: Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec). Only audit cycles of the season count, so every season starts fresh and a finished season's result never changes.</p>
   <p><b>Points.</b> For every cycle of the season your store <b>completes</b> you earn <b>20 points for taking part</b> plus <b>your match rate</b> (up to 100 points). A cycle you do not complete earns 0.</p>
+  <p><b>Bonus awards.</b> A completed cycle can earn one extra award. <b>🎯 One-Shot (+10)</b> — you submitted with <b>zero genuine shortage</b> and your audit was <b>never reopened</b>. <b>🧹 Clean Sweep (+5)</b> — shortage was found, but you explained <b>all</b> of it with remarks, management accepted every one, and the cycle closed at <b>zero genuine shortage</b> (and the audit was never reopened). A cycle earns only one award, so the most a single cycle can give is <b>130 points</b>. The 🎯 / 🧹 counts next to the points show how many times the store has earned each award this season.</p>
   <p><b>In-transit shortage is shown separately.</b> Your audit result still shows every short item as it is. For the ranking, shortage on items whose Inventory_Status is In Transit (already moved out of the store) is displayed on its own and does not lower your match rate: the match rate used for points is your matched stock measured against the shortage of all <b>other</b> statuses (the "genuine" shortage). Genuine shortage is what affects your performance.</p>
   <p><b>Match rate and shortage show your latest audit.</b> Every cycle is audited against a fresh base-data upload, so your ranking position is your latest completed cycle of the season — its match rate, shortage and in-transit figures are the ones shown. A serial still missing in the next cycle is the same one missing device, so it counts once; an item you find later stops counting; a non-serialized item counts at its latest short quantity. Points still add up across every cycle you complete.</p>
   <p><b>Levels.</b> Points alone are not enough — a level also needs quality: Bronze ≥ 50% of the season's cycles completed, match ≥ 85%, genuine shortage ≤ 8% · Silver ≥ 65%, ≥ 90%, ≤ 5% · Gold ≥ 80%, ≥ 97%, ≤ 2% · Platinum ≥ 90%, ≥ 98%, ≤ 1.5% · Diamond 100%, ≥ 99%, ≤ 0.5% · Champion 100%, match above 99%, ≤ 0.05% and every audit submitted within its deadline. The points target on the level card is a live benchmark — the lowest points held by any store at the next level this season (estimated from the level criteria when no store holds that level yet). The level itself is always decided by the targets.</p>
@@ -69,8 +73,8 @@ PAGES.ranking = async el => {
   const bPct = bench && bench.target > 0 ? Math.min(100, Math.round(1000 * Number(d.points || 0) / bench.target) / 10) : 0;
   const bLeft = bench ? bench.target - Number(d.points || 0) : 0;
   const benchMeta = !bench || bench.target <= 0
-    ? `<span><b>${rkPts(d.points)}</b> <span class="muted">points this season</span></span><span></span>`
-    : `<span><b>${rkPts(d.points)}</b> <span class="muted">/ ${rkPts(bench.target)}${bench.est ? ' (estimated target)' : ''}</span></span><span class="rk-lneed${bLeft > 0 ? '' : ' ok'}">${bLeft > 0 ? rkPts(bLeft) + ' points needed' : 'Benchmark reached ✓'}</span>`;
+    ? `<span><b>${rkPts(d.points)}</b> <span class="muted">points this season</span> ${rkBonusChips(d)}</span><span></span>`
+    : `<span><b>${rkPts(d.points)}</b> <span class="muted">/ ${rkPts(bench.target)}${bench.est ? ' (estimated target)' : ''}</span> ${rkBonusChips(d)}</span><span class="rk-lneed${bLeft > 0 ? '' : ' ok'}">${bLeft > 0 ? rkPts(bLeft) + ' points needed' : 'Benchmark reached ✓'}</span>`;
   const lvlCard = next ? `<div class="card rk-lvl">${rkRosette(lc, lvl, 62)}<div class="rk-lm"><div class="rk-lrow"><div><small>Your Level</small><div class="rk-lname" style="color:${lc}">${lvl}</div></div>
       <span class="rk-nchip">${rkRosette('#9AA7B1', next, 20)} Next Level: ${next}</span></div>
       <div class="bar2 rk-lbar"><i style="width:${bPct}%"></i></div>
@@ -78,7 +82,7 @@ PAGES.ranking = async el => {
     : `<div class="card rk-lvl">${rkRosette(lc, lvl, 62)}<div class="rk-lm"><div class="rk-lrow"><div><small>Your Level</small><div class="rk-lname" style="color:${lc}">${lvl}</div></div>
       <span class="rk-nchip">🏆 Highest Tier</span></div>
       <div class="bar2 rk-lbar"><i style="width:100%"></i></div>
-      <div class="rk-lmeta"><span><b>${rkPts(d.points)}</b> <span class="muted">points this season</span></span><span class="rk-lneed ok">Highest level reached</span></div></div></div>`;
+      <div class="rk-lmeta"><span><b>${rkPts(d.points)}</b> <span class="muted">points this season</span> ${rkBonusChips(d)}</span><span class="rk-lneed ok">Highest level reached</span></div></div></div>`;
   const icoCrown = '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 17 2.4 8.5 7.5 12 12 5.8 16.5 12l5.1-3.5L20.5 17z"/><path d="M4 20.5h16"/></svg>';
   const icoBars = '<svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3.5" y="12.5" width="4.6" height="7.5" rx="1.2"/><rect x="9.7" y="8" width="4.6" height="12" rx="1.2"/><rect x="15.9" y="3.5" width="4.6" height="16.5" rx="1.2"/></svg>';
   const rankCard = (cls, icon, label, n, sub) => `<div class="card rk-rc2 ${cls}"><div class="rk-rrow"><span class="rk-ric">${icon}</span><small class="rk-rl2">${label}</small></div><div class="rk-n">${none ? '—' : '#' + n}</div><div class="rk-sub">${none ? 'Complete your first audit to get ranked' : sub}</div></div>`;
@@ -119,7 +123,7 @@ PAGES.ranking = async el => {
     <div class="card rk-pc">${donut}<div><small>Season Progress</small><div class="rk-pn">${comp}% completed</div><div class="bar2 rk-pbar"><i style="width:${comp}%"></i></div><div class="rk-sub">${d.cycles_held ? (d.cycles_held - d.cycles_done) + ' cycle' + (d.cycles_held - d.cycles_done === 1 ? '' : 's') + ' remaining' : 'No cycles yet this season'}</div></div></div></div>
     ${kpis}${journey}
     <div class="card rk-perf"><b>Season Performance</b><div class="rk-twrap">${nCyc ? tbl(['Audit Cycle', 'Status', 'Cycle', 'Match Rate', 'Genuine Shortage', 'In Transit', 'Points'], d.cycles.map((c, ix) => `<tr><td>${esc(c.name)}${c.status === 'ACTIVE' ? ' ' + badge('Open', 'info') : ''}</td><td>${c.done ? badge('Completed', 'ok') : badge('Not completed', 'bad')}</td>
-      <td>${nCyc - ix} / ${nCyc}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td><b>${rkPts(c.points)}</b></td></tr>`).join('')) : '<p class="muted">No audit cycle yet this season.</p>'}</div></div>${nextCard}${rkHow()}`;
+      <td>${nCyc - ix} / ${nCyc}</td><td>${c.match_rate == null ? '—' : c.match_rate + '%'}</td><td>${c.done ? rkPts(c.short_other) : '—'}</td><td>${c.done ? rkPts(c.short_transit) : '—'}</td><td><b>${rkPts(c.points)}</b>${c.bonus === 10 ? ' <span class="rk-btag os">🎯 One-Shot +10</span>' : c.bonus === 5 ? ' <span class="rk-btag cs">🧹 Clean Sweep +5</span>' : ''}</td></tr>`).join('')) : '<p class="muted">No audit cycle yet this season.</p>'}</div></div>${nextCard}${rkHow()}`;
 };
 
 // ---- a table over already-loaded rows: click a heading to sort (A to Z / Z to A, low to high / high to low). No filters. ----
@@ -175,7 +179,7 @@ async function rankStaff(el) {
     truck: ti('<path d="M2.5 6h12v11h-12zM14.5 10h4l3 3.5V17h-7z"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17.5" cy="17.5" r="1.8"/>', '#2563EB') };
   const topCard3 = (s, r) => `<div class="rpc3 w${r}">${crown(r)}<div class="rpc3-main"><span class="rkmedal m${r}">${r}</span>
     <div class="rpc3-store"><b>${esc(s.code)}</b><span>${rkLvlChip(s.level)}</span></div>
-    <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span></div></div>
+    <div class="rpc3-pts"><b>${rkPts(s.points)}</b><span>Points</span>${rkBonusChips(s) ? `<div>${rkBonusChips(s)}</div>` : ''}</div></div>
     <div class="rpc3-stats"><div><span>India Rank</span><b>#${s.pan_rank}</b></div><div><span>Circle Rank</span><b>#${s.circle_rank}</b></div><div><span>Cycles</span><b>${s.cycles_done}/${s.cycles_held}</b></div><div><span>Match Rate</span><b>${rkPct2(s.match_rate)}</b></div><div><span>Short %</span><b>${rkPct(rkCpct(s))}</b></div></div>
     <div class="rpc3-qty"><span class="q-tr">${TI.truck} In Transit <b>${rkPts(s.short_transit)}</b></span><span class="q-wn">${TI.warn} Genuine Shortage <b>${rkPts(s.short_other)}</b> units</span></div></div>`;
   const podium = () => top3.length ? `<section class="rkpod3"><div class="rp2-head"><span class="rp2-ticon">${ic('trophy', 20)}</span><div class="rp2-tt"><b>Top 3 Stores (India) <small>— ${esc(seasons[si].label)}</small></b></div><button type="button" class="rp2-link" id="rk-full">View full ranking &nbsp;&rarr;</button></div><div class="rp3-row">${top3.map((s, i) => topCard3(s, i + 1)).join('')}</div></section>` : '';
@@ -185,7 +189,7 @@ async function rankStaff(el) {
     { k: 'store', w: 16, l: 'Store', t: 'text', get: s => s.code + ' ' + s.name, cell: s => `<b>${esc(s.code)}</b>` },
     { k: 'circle', w: 6, l: 'Circle', t: 'text', get: s => s.circle, cell: s => esc(s.circle) },
     { k: 'level', w: 10, l: 'Level', t: 'text', get: s => s.level || 'Unranked', cell: s => rkLvlChip(s.level) },
-    { k: 'points', w: 7, l: 'Points', t: 'num', get: s => s.points, cell: s => `<b>${rkPts(s.points)}</b>` },
+    { k: 'points', w: 7, l: 'Points', t: 'num', get: s => s.points, cell: s => `<b>${rkPts(s.points)}</b>${rkBonusChips(s) ? `<div>${rkBonusChips(s)}</div>` : ''}` },
     { k: 'cycles_done', w: 7, l: 'Cycles', t: 'num', get: s => s.cycles_done, cell: s => `${s.cycles_done} / ${s.cycles_held}` },
     { k: 'match_rate', w: 9, l: 'Match Rate', t: 'num', get: s => s.match_rate, cell: s => rkPct2(s.match_rate) },
     { k: 'short_transit', w: 8, l: 'In Transit', t: 'num', get: s => s.short_transit, cell: s => rkPts(s.short_transit) },
@@ -208,7 +212,7 @@ async function rankStaff(el) {
   async function exportRanking() {
     if (!lastRows.length) { toast('Nothing to export.', 'warn'); return; }
     try { await loadXlsx(); } catch (e) { toast(e.message || 'Could not load the Excel library.', 'err'); return; }
-    const data = lastRows.map(s => ({ 'Rank in India': ranked(s) ? s.pan_rank : '—', 'Rank in circle': ranked(s) ? s.circle_rank : '—', 'Store code': s.code, 'Store name': s.name, 'Circle': s.circle, 'Level': s.level || 'Unranked', 'Points': Number(s.points || 0), 'Cycles': `${s.cycles_done} of ${s.cycles_held}`, 'Match rate %': s.match_rate == null ? '' : Number(s.match_rate), 'Short (all)': Number(s.short || 0), 'In transit': Number(s.short_transit || 0), 'Other status': Number(s.short_other || 0), 'Genuine shortage %': rkCpct(s) == null ? '' : Number(rkCpct(s)) }));
+    const data = lastRows.map(s => ({ 'Rank in India': ranked(s) ? s.pan_rank : '—', 'Rank in circle': ranked(s) ? s.circle_rank : '—', 'Store code': s.code, 'Store name': s.name, 'Circle': s.circle, 'Level': s.level || 'Unranked', 'Points': Number(s.points || 0), 'One-Shot cycles': Number(s.oneshot || 0), 'Clean Sweep cycles': Number(s.cleansweep || 0), 'Cycles': `${s.cycles_done} of ${s.cycles_held}`, 'Match rate %': s.match_rate == null ? '' : Number(s.match_rate), 'Short (all)': Number(s.short || 0), 'In transit': Number(s.short_transit || 0), 'Other status': Number(s.short_other || 0), 'Genuine shortage %': rkCpct(s) == null ? '' : Number(rkCpct(s)) }));
     const ws = XLSX.utils.json_to_sheet(data), wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Ranking');
     const dd = new Date(), ymd = dd.getFullYear() + String(dd.getMonth() + 1).padStart(2, '0') + String(dd.getDate()).padStart(2, '0');
