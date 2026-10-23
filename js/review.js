@@ -179,14 +179,14 @@ PAGES.review = async el => {
   const clearSessionCache = sid => Object.keys(entCache).forEach(k => { if (k.startsWith(sid + '|')) delete entCache[k]; });
 
   async function saveGroup(sid, cid, val) {
-    const { error } = await sb.rpc('review_remark_group', { p_session: sid, p_category: cid || null, p_accepted: val });
+    const { error } = await sb.rpc('review_remark_group', { p_session: sid, p_category: cid || null, p_accepted_total: val });
     if (error) { toast(rpcMsg(error), 'err'); return; }
     toast('Revision saved — shortage and ranking updated.', 'ok');
     clearSessionCache(sid); await refresh(true);
   }
   async function saveEntry(id, val) {
     const { key } = findEntry(id);
-    const { error } = await sb.rpc('review_remark_entry', { p_id: id, p_accepted: val });
+    const { error } = await sb.rpc('review_remark_entry', { p_remark: id, p_accepted_qty: val });
     if (error) { toast(rpcMsg(error), 'err'); return; }
     toast('Revision saved — shortage and ranking updated.', 'ok');
     if (key) delete entCache[key];
@@ -199,7 +199,7 @@ PAGES.review = async el => {
     for (const e of list) {
       const inp = el.querySelector(`[data-eacc="${e.id}"]`);
       const val = reject ? 0 : e.is_serialized ? Number(e.qty) : Number(inp ? inp.value : e.qty);
-      const { error } = await sb.rpc('review_remark_entry', { p_id: e.id, p_accepted: val });
+      const { error } = await sb.rpc('review_remark_entry', { p_remark: e.id, p_accepted_qty: val });
       if (error) fail++; else checked.delete(e.id);
     }
     toast(fail ? `${fail} entr${fail === 1 ? 'y' : 'ies'} could not be saved.` : `Revision saved for ${list.length} entries — shortage and ranking updated.`, fail ? 'err' : 'ok');
@@ -213,7 +213,7 @@ PAGES.review = async el => {
       const req = el.querySelector(`.c-req[data-cid="${c.id}"]`).checked, act = el.querySelector(`.c-act[data-cid="${c.id}"]`).checked;
       if (!name) { toast('Category name cannot be empty.', 'err'); return; }
       if (name === c.name && ref === (c.ref_label || '') && req === !!c.ref_required && act === !!c.active) continue;
-      const { error } = await sb.rpc('admin_remark_category_save', { p_id: c.id, p_name: name, p_ref_label: ref, p_required: req, p_sort: c.sort || 0, p_active: act });
+      const { error } = await sb.rpc('admin_remark_category_save', { p_id: c.id, p_name: name, p_ref_label: ref, p_ref_required: req, p_sort: c.sort || 0, p_active: act });
       if (error) { toast(rpcMsg(error), 'err'); return; }
       changed++;
     }
@@ -229,7 +229,7 @@ PAGES.review = async el => {
       const name = o.querySelector('#ac-name').value.trim();
       if (!name) { toast('Please enter a category name.', 'err'); return false; }
       const sort = cats.reduce((m, c) => Math.max(m, c.sort || 0), 0) + 1;
-      const { error } = await sb.rpc('admin_remark_category_save', { p_id: null, p_name: name, p_ref_label: o.querySelector('#ac-ref').value.trim(), p_required: o.querySelector('#ac-req').checked, p_sort: sort, p_active: o.querySelector('#ac-act').checked });
+      const { error } = await sb.rpc('admin_remark_category_save', { p_id: null, p_name: name, p_ref_label: o.querySelector('#ac-ref').value.trim(), p_ref_required: o.querySelector('#ac-req').checked, p_sort: sort, p_active: o.querySelector('#ac-act').checked });
       if (error) throw error;
       await loadCats(); cats.sort((a, b) => (a.sort || 0) - (b.sort || 0)); render();
       toast('Category added.', 'ok');
