@@ -13,7 +13,7 @@ const FLY = {   // sub-menus open in a flyout beside the sidebar (title, descrip
 const GROUP_OF = { reports: 'reports', logs: 'reports', stores: 'mgmt', users: 'mgmt', storeaudit: 'ops', basestock: 'ops', storedetail: 'ops', result: 'ops', review: 'ops' };
 const HEAD = { dashboard: ['Dashboard', ''], reports: ['Reports', 'Download audit reports, analytics and export data.'], logs: ['Audit Logs', 'Track all activities and changes in the system.'],
   stores: ['Stores', 'Manage all stores across circles.'], users: ['Users', 'Manage application users, roles and store assignments.'], storeaudit: ['Store Audit', 'Monitor store-wise audit progress, view variances and drill down to detailed records.'],
-  basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], review: ['Shortage Review', 'Review store remarks on genuine shortage — accepted quantities stop counting as shortage, ranking updates live.'], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'],
+  basestock: ['Base Stock', "Upload and freeze each store's base stock for the current audit cycle."], review: ['Shortage Review', ''], storedetail: ['', ''], result: ['', ''], profile: ['My Account', 'View and manage your profile information.'],
   ranking: ['Ranking', 'Store and circle ranking based on audit results and participation.'] };
 
 const S = { session: null, profile: null, store: null, circles: [], recovery: false, cycles: [], cycleId: null, cycleName: '', progress: null, openGroup: null, ctx: null, shellUser: null };
@@ -142,7 +142,7 @@ function staffSidebar(cur) {
 const bell = () => `<div style="position:relative"><button class="bellb" id="bell" aria-label="Notifications">${ic('bell', 20)}<span class="dot" id="beldot" hidden></span></button><div class="pop" id="pop" hidden></div></div>`;
 function staffTop(cur) {
   const [t, s] = HEAD[cur] || ['', ''];
-  return `<header class="tb"><button type="button" class="mnav" id="mnav" aria-label="Open menu">&#9776;</button><div class="tb-t">${t ? `<h1>${t}</h1><p>${s}</p>` : ''}</div><div class="tb-r"><div class="chip-i cal"><span class="tile" style="background:#FDE8E8">${ic('cal', 18)}</span><div><small>Audit Cycle</small><b>${esc(S.cycleName || '—')}</b></div></div>${bell()}<a class="avatar" href="#/profile">${esc(initials(S.profile.full_name))}</a></div></header>`;
+  return `<header class="tb"><button type="button" class="mnav" id="mnav" aria-label="Open menu">&#9776;</button><div class="tb-t">${t ? `<h1>${t}</h1>${s ? `<p>${s}</p>` : ''}` : ''}</div><div class="tb-r"><div class="chip-i cal"><span class="tile" style="background:#FDE8E8">${ic('cal', 18)}</span><div><small>Audit Cycle</small><b>${esc(S.cycleName || '—')}</b></div></div>${bell()}<a class="avatar" href="#/profile">${esc(initials(S.profile.full_name))}</a></div></header>`;
 }
 function storeTop() {
   const st = S.store;
@@ -160,6 +160,7 @@ function paintMtabs() {
   const tab = S.cur === 'dashboard' ? 'dashboard' : S.cur === 'result' ? 'result' : S.cur === 'audit' ? (/tab=non/.test(h) ? 'entry' : 'audit') : '';
   m.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.mt === tab));
 }
+function setCycLabel(name) { const n = document.getElementById('cyc-name'); if (n) n.textContent = name || '—'; }
 async function fillTop() {
   try {
     if (isStaff()) {
@@ -167,7 +168,12 @@ async function fillTop() {
       const d = document.getElementById('beldot'); if (d) d.hidden = !S.pending;
     } else {
       const { data } = await sb.rpc('my_audit_context'); S.ctx = data;
-      const n = document.getElementById('cyc-name'); if (n) n.textContent = data && data.cycle ? data.cycle.name : '—';
+      /* the chip names the cycle being VIEWED: a previous cycle picked from the chip (#/result?cycle=…) wins; otherwise the latest (current) cycle */
+      const want = /^#\/result/.test(location.hash || '') ? new URLSearchParams(location.hash.split('?')[1] || '').get('cycle') : null;
+      if (want && want !== (data && data.cycle && data.cycle.id)) {
+        const r = await sb.from('audit_cycles').select('name').eq('id', want).maybeSingle();
+        setCycLabel(r.data ? r.data.name : (data && data.cycle ? data.cycle.name : null));
+      } else setCycLabel(data && data.cycle ? data.cycle.name : null);
       const d = document.getElementById('beldot'); if (d) d.hidden = !(data && data.session && data.session.reopen_reason && data.session.status === 'IN_PROGRESS');
     }
   } catch (e) { /* topbar extras are optional */ }
@@ -188,7 +194,7 @@ function updateShell(cur) {
   paintMtabs();
   document.querySelectorAll('.sb .nv > a[href]').forEach(x => x.classList.toggle('on', x.getAttribute('href') === '#/' + cur));
   document.querySelectorAll('.sb .nv .grp').forEach(x => x.classList.toggle('on', x.dataset.grp === GROUP_OF[cur]));
-  const t = document.querySelector('.tb-t'); if (t && isStaff()) { const [h, s] = HEAD[cur] || ['', '']; t.innerHTML = h ? `<h1>${h}</h1><p>${s}</p>` : ''; }
+  const t = document.querySelector('.tb-t'); if (t && isStaff()) { const [h, s] = HEAD[cur] || ['', '']; t.innerHTML = h ? `<h1>${h}</h1>${s ? `<p>${s}</p>` : ''}` : ''; }
   const p2 = document.querySelector('.page2'); if (p2) { p2.classList.remove('fixed'); p2.scrollTop = 0; }
   if (isStaff() && typeof refreshProgress === 'function') refreshProgress();     // keep the sidebar progress bar current
   const old = document.getElementById('pg'), pg = document.createElement('div'); pg.id = 'pg'; pg.className = 'fade'; pg.innerHTML = universeLoader(); old.replaceWith(pg);   // fresh element: no stale handlers
