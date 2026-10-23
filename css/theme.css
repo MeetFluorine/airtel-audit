@@ -401,10 +401,13 @@ html,body{height:100%;overflow:hidden}
 .sa-cancel{display:inline-block;margin-top:14px;color:#6B7B75;font-weight:600;text-decoration:none;font-size:14px}
 
 /* Brand band footer — pinned at the bottom of every app page */
-.app-footer-band{flex:none;background:#0b3d24;color:#dcefe2;border-radius:10px;margin:24px 0 0;padding:12px 18px;display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;align-items:center;font-size:12.5px}
+.app-footer-band{flex:none;background:transparent;color:#42604f;border-top:1px solid #dde7e1;margin:24px 0 0;padding:14px 2px 6px;display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:space-between;align-items:center;font-size:12.5px}
 .app-footer-band .afb-l{display:flex;align-items:center;gap:9px}
-.app-footer-band .afb-name{display:block;font-weight:800;color:#fff;line-height:1.2}
-.app-footer-band .afb-sub{display:block;font-size:9px;font-weight:600;letter-spacing:.22em;color:#9fd4b2}
-.app-footer-band .afb-credit b{color:#fff}
+.app-footer-band .afb-name{display:block;font-weight:800;color:#0b3d24;line-height:1.2}
+.app-footer-band .afb-sub{display:block;font-size:9px;font-weight:600;letter-spacing:.22em;color:#6d8a7a}
+.app-footer-band .afb-credit b{color:#0b3d24}
 .app-footer-band .afb-heart{width:13px;height:13px;fill:#ff5c8a;display:inline-block;vertical-align:-2px;margin:0 1px}
 @media (max-width:900px){.app-footer-band{margin-top:18px}}
+/* Footer sits at the bottom of the page area: short or loading content stretches #pg so the band never floats mid-screen */
+.page2{display:flex;flex-direction:column}
+.page2>#pg{flex:1 0 auto}
