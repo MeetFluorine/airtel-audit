@@ -153,7 +153,7 @@ const footerBand = () => `<footer class="app-footer-band"><span class="afb-l">${
 function shell(page) {
   const staff = isStaff(), cur = resolvePage(page, staff); S.cur = cur;
   const mtabs = staff ? '' : `<nav class="mtabs" id="mtabs"><a href="#/dashboard" data-mt="dashboard"><span class="mt-ic">${ic('home', 20)}</span>Home</a><a href="#/audit" data-mt="audit"><span class="mt-ic">${ic('barcode', 20)}</span>Scan</a><a href="#/audit?tab=non" data-mt="entry"><span class="mt-ic">${ic('clip', 20)}</span>Entry</a><a href="#/result" data-mt="result"><span class="mt-ic">${ic('trend', 20)}</span>Result</a></nav>`;
-  return `<div class="app${cur === 'ranking' ? ' no-top' : ''}">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="scrim" id="scrim"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg">${universeLoader()}</div></main>${footerBand()}${mtabs}</div></div>`;
+  return `<div class="app${cur === 'ranking' ? ' no-top' : ''}">${staff ? staffSidebar(cur) : storeSidebar(cur)}<div class="fly" id="fly"></div><div class="scrim" id="scrim"></div><div class="main2">${staff ? staffTop(cur) : storeTop()}<main class="page2"><div id="pg">${universeLoader()}</div>${footerBand()}</main>${mtabs}</div></div>`;
 }
 function paintMtabs() {
   const m = document.getElementById('mtabs'); if (!m) return;
