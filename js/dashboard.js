@@ -3,9 +3,10 @@ const pct = v => v == null ? '—' : Number(v).toFixed(1) + '%';
 const rateCls = r => r == null ? '' : r >= 90 ? 'ok' : r >= 75 ? 'warn' : 'bad';
 const healthOf = r => r == null ? null : r >= 90 ? ['Healthy', 'ok'] : r >= 75 ? ['Warning', 'warn'] : ['Critical', 'bad'];
 const HEALTH = { HEALTHY: 'ok', WARNING: 'warn', CRITICAL: 'bad', PENDING: '' };
-const EVT = { AUDIT_STARTED: 'started the audit', AUDIT_SUBMITTED: 'audit submitted', AUDIT_REOPENED: 'audit reopened', BASE_FROZEN: 'base stock frozen', BASE_UPLOADED: 'base stock uploaded', CYCLE_CLOSED: 'cycle closed',
-  SERIAL_DUPLICATE: 'duplicate scan', SERIAL_NOT_FOUND: 'serial not in store base', UNLISTED_SERIAL_ADDED: 'unlisted serial added', NON_SERIAL_ADDED: 'non-serialized added', ENTRY_REMOVED: 'entry removed',
-  ENTRY_EDITED: 'entry edited', PREVIEW_OPENED: 'preview opened', AUDIT_LOCKED: 'audit locked', VALIDATION_FAILED: 'upload validation failed' };
+const EVT = { AUDIT_STARTED: 'started the audit', AUDIT_SUBMITTED: 'audit submitted', AUDIT_REOPENED: 'audit reopened', BASE_FROZEN: 'base stock frozen', BASE_UPLOADED: 'base stock uploaded', CYCLE_CLOSED: 'cycle closed', CYCLE_REOPENED: 'cycle reopened',
+  SERIAL_SCANNED: 'serial scanned', SERIAL_DUPLICATE: 'duplicate scan', SERIAL_NOT_FOUND: 'serial not in store base', UNLISTED_SERIAL_ADDED: 'unlisted serial added', NON_SERIAL_ADDED: 'non-serialized added', ENTRY_REMOVED: 'entry removed',
+  ENTRY_EDITED: 'entry edited', PREVIEW_OPENED: 'preview opened', AUDIT_LOCKED: 'audit locked', VALIDATION_FAILED: 'upload validation failed',
+  SHORTAGE_REMARK_SAVED: 'shortage remark saved', SHORTAGE_REVIEWED: 'shortage reviewed' };
 const STATUS_LBL = { COMPLETED: ['Completed', 'ok'], IN_PROGRESS: ['In Progress', 'info'], NOT_STARTED: ['Not Started', 'warn'] };
 const ago = d => { const m = Math.max(0, Math.round((Date.now() - new Date(d)) / 60000)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' hour' + (Math.round(m / 60) === 1 ? '' : 's') + ' ago' : Math.round(m / 1440) + ' day' + (Math.round(m / 1440) === 1 ? '' : 's') + ' ago'; };
 const pager = (count, page, PS) => `<div class="bar"><span class="muted">${fn(count)} row(s)</span><div class="row"><button class="btn sm" data-pg="-1" ${page ? '' : 'disabled'}>Previous</button><button class="btn sm" data-pg="1" ${(page + 1) * PS < count ? '' : 'disabled'}>Next</button></div></div>`;
@@ -173,9 +174,9 @@ async function adminDash(el) {
       const attrs = legend ? ` class="tint lk" role="button" tabindex="0" data-legend="${legend}" title="Rank circles by ${label.toLowerCase()} units"` : ` class="tint"${tip ? ` title="${tip}"` : ''}`;
       return `<div${attrs} style="--tint:${tint};--pill:${color}"><i style="background:${color}"></i><span>${label}</span><b>${fn(val)}</b><span class="p">${stockTot ? (100 * val / stockTot).toFixed(1) : '0.0'}%</span></div>`;
     };
-    const legSub = (label, val, color) => `<div class="sub" title="${T.short ? (100 * val / T.short).toFixed(1) : '0.0'}% of total shortage"><i style="background:${color}"></i><span>${label}</span><b>${fn(val)}</b><span class="p">${T.short ? (100 * val / T.short).toFixed(1) : '0.0'}%</span></div>`;
+    const legSub = (label, val, color, subtotal) => `<div class="sub${subtotal ? ' tot' : ''}" title="${subtotal ? 'Subtotal of the Serialized + Non-serialized rows above — already counted, not an extra slice' : (T.short ? (100 * val / T.short).toFixed(1) : '0.0') + '% of total shortage'}"><i style="background:${color}"></i><span>${label}${subtotal ? ' (subtotal)' : ''}</span><b>${fn(val)}</b><span class="p">${T.short ? (100 * val / T.short).toFixed(1) : '0.0'}%</span></div>`;
     const shortSubs = bd ? (hasRev
-      ? `<div class="tree">${legSub('In transit', shTransit, '#FCA5A5')}${legSub('Serialized', shSerV, '#E5484D')}${legSub('Non-serialized', shNonV, '#F59E0B')}${legSub('Explained (accepted)', shExpl, '#14B8A6')}${legSub('Revised genuine shortage', shSerV + shNonV, '#0B3D2E')}</div>`
+      ? `<div class="tree">${legSub('In transit', shTransit, '#FCA5A5')}${legSub('Serialized', shSerV, '#E5484D')}${legSub('Non-serialized', shNonV, '#F59E0B')}${legSub('Explained (accepted)', shExpl, '#14B8A6')}${legSub('Revised genuine shortage', shSerV + shNonV, '#0B3D2E', true)}</div>`
       : `<div class="tree">${legSub('In transit', shTransit, '#FCA5A5')}${legSub('Serialized', shSer, '#E5484D')}${legSub('Non-serialized', shNon, '#F59E0B')}</div>`) : '';
     const stockLeg = legRow('Available', T.matched, '#16A34A', '#E7F6ED', '')
       + legRow('Short', T.short, '#E5484D', '#FDECEC', 'short')
@@ -281,9 +282,36 @@ PAGES.storeaudit = async el => {
     && (F.tab === 'ALL' || (F.tab === 'CRIT' ? crit(r) : F.tab === 'OVERDUE' ? overdue(r) : r.audit_status === F.tab)));
   const cnt = k => k === 'ALL' ? rows.length : k === 'CRIT' ? rows.filter(crit).length : k === 'OVERDUE' ? rows.filter(overdue).length : rows.filter(r => r.audit_status === k).length;
   const sel = (id, label, opts, cur) => `<div><label>${label}</label><select id="${id}">${opts.map(o => `<option value="${o[0]}" ${o[0] === cur ? 'selected' : ''}>${o[1]}</option>`).join('')}</select></div>`;
+  // Sortable headings, same pattern as the Ranking table (⇅ / ↑ / ↓, blanks
+  // always last, stable on ties). Previously this table had no sorting at all.
+  const COLS = [
+    { k: 'name', l: 'Store Name', t: 'text', get: r => r.name },
+    { k: 'circle', l: 'Circle', t: 'text', get: r => r.circle },
+    { k: 'status', l: 'Status', t: 'text', get: r => r.audit_status },
+    { k: 'match', l: 'Match Rate', t: 'num', get: r => r.match_rate },
+    { k: 'physical', l: 'Physical Found', t: 'num', get: r => r.physical },
+    { k: 'short', l: 'Short', t: 'num', get: r => r.short },
+    { k: 'excess', l: 'Excess', t: 'num', get: r => r.excess },
+    { k: 'updated', l: 'Last Updated', t: 'text', get: r => r.last_updated },
+  ];
+  const saSort = { k: null, dir: 'asc' };
+  function sortedList() {
+    const l = list();
+    if (!saSort.k) return l;
+    const c = COLS.find(x => x.k === saSort.k); if (!c) return l;
+    const dir = saSort.dir === 'desc' ? -1 : 1;
+    return l.map((r, i) => [r, i]).sort((A, B) => {
+      const x = c.get(A[0]), y = c.get(B[0]), nx = x == null || x === '', ny = y == null || y === '';
+      if (nx || ny) return nx && ny ? A[1] - B[1] : nx ? 1 : -1;
+      const d = c.t === 'num' ? Number(x) - Number(y) : String(x).localeCompare(String(y), undefined, { sensitivity: 'base', numeric: true });
+      return d * dir || A[1] - B[1];
+    }).map(p => p[0]);
+  }
   function table() {
-    const l = list(), pageRows = l.slice(F.page * PS, F.page * PS + PS);
-    return tbl(['Store Name', 'Circle', 'Status', 'Match Rate', 'Physical Found', 'Short', 'Excess', 'Last Updated', 'Action'], pageRows.map(r => { const s = crit(r) ? ['Critical', 'bad'] : STATUS_LBL[r.audit_status];
+    const l = sortedList(), pageRows = l.slice(F.page * PS, F.page * PS + PS);
+    const arrow = c => !saSort.k || saSort.k !== c.k ? '⇅' : saSort.dir === 'asc' ? '↑' : '↓';
+    const heads = COLS.map(c => `<span class="srt ${saSort.k === c.k ? 'on' : ''}" data-sort="${c.k}" title="Sort ${c.t === 'num' ? 'low to high, then high to low' : 'A to Z, then Z to A'}">${c.l}<i>${arrow(c)}</i></span>`).concat(['Action']);
+    return tbl(heads, pageRows.map(r => { const s = crit(r) ? ['Critical', 'bad'] : STATUS_LBL[r.audit_status];
       return `<tr><td><b>${esc(r.name)}</b><br><span class="muted">${esc(r.code)}</span></td><td>${esc(r.circle)}</td><td>${badge(s[0], s[1])}${overdue(r) ? ' ' + badge('Overdue', 'bad') : ''}</td><td>${r.match_rate == null ? '—' : `<b class="${r.match_rate < 75 ? 'neg' : ''}">${pct(r.match_rate)}</b>`}</td><td>${r.physical == null ? '—' : fn(r.physical)}</td>
         <td class="${Number(r.short) ? 'neg' : ''}">${r.short == null ? '—' : fn(r.short)}</td><td class="${Number(r.excess) ? 'pos' : ''}">${r.excess == null ? '—' : fn(r.excess)}</td><td class="nw">${r.last_updated ? fdt(r.last_updated) : '—'}</td><td><a class="eyeb" href="#/storedetail?s=${r.store_id}" title="Open store">${ic('eye', 17)}</a></td></tr>`; }).join('')) + numPager(l.length, F.page, PS);
   }
@@ -302,8 +330,10 @@ PAGES.storeaudit = async el => {
   el.onchange = e => { const m = { f_ci: 'circle', f_st: 'status', f_ra: 'rate', f_va: 'variance' }[e.target.id]; if (m) { F[m] = e.target.value; F.page = 0; redraw(); } };
   el.oninput = e => { if (e.target.id === 'f_q') { F.q = e.target.value.trim().toLowerCase(); F.page = 0; redraw(); } };
   el.onkeydown = e => { if (e.key === 'Enter' && e.target.id === 'f_q') find(); };
-  el.onclick = e => { const t = e.target.closest('[data-tab]'); if (t) { F.tab = t.dataset.tab; F.page = 0; return redraw(); } const p = e.target.closest('[data-np]'); if (p) { F.page = Number(p.dataset.np); redraw(); }
-    const x = e.target.closest('#exp'); if (x) busy(x, () => downloadReport('store_summary', cid, F.circle ? circleIdOf[F.circle] || null : null, null, false)).catch(err => toast(rpcMsg(err), 'err')); };
+  el.onclick = e => { const t = e.target.closest('[data-tab]'); if (t) { F.tab = t.dataset.tab; F.page = 0; return redraw(); } const s = e.target.closest('[data-sort]');
+    if (s) { const k = s.dataset.sort; if (saSort.k === k) { if (saSort.dir === 'asc') saSort.dir = 'desc'; else saSort.k = null; } else { saSort.k = k; saSort.dir = 'asc'; } F.page = 0; return redraw(); }
+    const p = e.target.closest('[data-np]'); if (p) { F.page = Number(p.dataset.np); redraw(); }
+    const x = e.target.closest('#exp'); if (x) busy(x, () => downloadReport('pan_india', cid, F.circle ? circleIdOf[F.circle] || null : null, null, false)).catch(err => toast(rpcMsg(err), 'err')); };
 };
 
 /* ================= STORE DETAIL (drill-down) ================= */
