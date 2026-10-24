@@ -162,8 +162,31 @@ async function rankStaff(el) {
   let stores = [], circles = [], cs = [], top3 = [];
   const apply = () => { stores = d.stores || []; circles = d.circles || []; cs = [...new Set(stores.map(s => s.circle))].sort();
     top3 = admin ? stores.filter(s => s.cycles_done > 0).sort((a, b) => a.pan_rank - b.pan_rank || String(a.code).localeCompare(String(b.code))).slice(0, 3) : []; };
+  // Per-store status in the CURRENTLY LOADED cycle (sidebar AUDIT CYCLE,
+  // S.cycleId) — the four summary cards below read this, not the season
+  // totals. curStatsOk stays false when there is no loaded cycle or the
+  // session query fails, and the cards then fall back to the old season
+  // math instead of breaking the page. A store with a LOCKED session counts
+  // as completed even if it also has an IN_PROGRESS (reopened) version —
+  // the same "done" rule _store_rank uses.
+  let curLocked = new Set(), curProg = new Set(), curStatsOk = false;
+  const loadCurCycleStats = async () => {
+    curLocked = new Set(); curProg = new Set(); curStatsOk = false;
+    if (!S.cycleId) return;
+    try {
+      const { data, error } = await sb.from('audit_sessions').select('store_id,status').eq('audit_cycle_id', S.cycleId);
+      if (error) throw error;
+      (data || []).forEach(r => {
+        if (r.status === 'LOCKED') curLocked.add(r.store_id);
+        else if (r.status === 'IN_PROGRESS') curProg.add(r.store_id);
+      });
+      curProg.forEach(id => { if (curLocked.has(id)) curProg.delete(id); });
+      curStatsOk = true;
+    } catch (e) { curLocked = new Set(); curProg = new Set(); curStatsOk = false; }
+  };
   apply();
-  const load = async () => { const r = await sb.rpc('rank_staff', rkWin(seasons[si])); if (r.error) throw r.error; d = r.data; apply(); };
+  await loadCurCycleStats();
+  const load = async () => { const r = await sb.rpc('rank_staff', rkWin(seasons[si])); if (r.error) throw r.error; d = r.data; apply(); await loadCurCycleStats(); };
   const tabs = admin ? [['stores', 'Stores (India)', 'store'], ['circles', 'Circles', 'grid'], ['top', 'Top store of each circle', 'trophy']]
     : [['stores', 'Stores', 'store'], ['circles', circles.length > 1 ? 'My circles' : 'My circle', 'grid']];
   const F = { tab: 'stores', q: '', c: '', page: 1, ps: 10 }, ranked = s => s.cycles_done > 0;
@@ -265,12 +288,20 @@ const rkTopCard = (c, s) => `<div class="tcard">
       if (!admin) rows = rows.slice().sort((a, b) => a.circle.localeCompare(b.circle) || a.circle_rank - b.circle_rank || a.code.localeCompare(b.code));
       rows = rkSorted(SC, rows, SS);
       lastRows = rows;
-      // Season summary cards: where the visible stores stand this season.
-      const nT = stores.length, nC = stores.filter(s => s.cycles_held > 0 && s.cycles_done >= s.cycles_held).length,
-        nP = stores.filter(s => s.cycles_done > 0 && s.cycles_done < s.cycles_held).length, nN = stores.filter(s => !s.cycles_done).length;
+      // Summary cards: the CURRENTLY LOADED cycle only. The old season math
+      // (cycles_done vs cycles_held) kept describing the previous completed
+      // cycle, because _store_rank only counts an ACTIVE cycle once a store
+      // locks it — so while a new cycle was open, every store that finished
+      // the last one still showed as "Completed" here.
+      const useCur = !!(S.cycleId && curStatsOk);
+      const nT = stores.length;
+      const nC = useCur ? stores.filter(s => curLocked.has(s.id)).length : stores.filter(s => s.cycles_held > 0 && s.cycles_done >= s.cycles_held).length;
+      const nP = useCur ? stores.filter(s => curProg.has(s.id)).length : stores.filter(s => s.cycles_done > 0 && s.cycles_done < s.cycles_held).length;
+      const nN = useCur ? nT - nC - nP : stores.filter(s => !s.cycles_done).length;
       const pctOf = n => nT ? (Math.round(1000 * n / nT) / 10) + '%' : '—';
       const stat = (cls, icon, label, val, sub, barPct) => `<div class="card rk-stat"><span class="rk-ric ${cls}">${icon}</span><div class="rk-sm"><small>${label}</small><div class="rk-sv">${val}</div>${sub ? `<div class="rk-ssub">${sub}</div>` : ''}${barPct != null ? `<div class="bar2 rk-sbar ${cls}"><i style="width:${barPct}%"></i></div>` : ''}</div></div>`;
-      const stats = `<div class="rk-stats">${stat('b', ic('store', 19), 'Total Stores', nT.toLocaleString('en-IN'), 'Stores', null)}
+      const cycNote = useCur ? `<div class="muted" style="margin-bottom:10px">Current cycle: <b>${esc(S.cycleName)}</b>${S.cycleStatus && S.cycleStatus !== 'ACTIVE' ? ' (closed)' : ' (open)'}</div>` : '';
+      const stats = `${cycNote}<div class="rk-stats">${stat('b', ic('store', 19), 'Total Stores', nT.toLocaleString('en-IN'), 'Stores', null)}
         ${stat('g', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" opacity=".18"/><path d="M8.5 12.5l2.4 2.4L15.7 9.6"/></svg>', 'Completed', pctOf(nC), `${nC} / ${nT} stores`, nT ? 100 * nC / nT : 0)}
         ${stat('a', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.3"/><path d="M21 3v6h-6"/></svg>', 'In Progress', pctOf(nP), `${nP} / ${nT} stores`, nT ? 100 * nP / nT : 0)}
         ${stat('gr', '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>', 'Not Started', pctOf(nN), `${nN} / ${nT} stores`, nT ? 100 * nN / nT : 0)}</div>`;
