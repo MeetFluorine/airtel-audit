@@ -384,7 +384,7 @@ html,body{height:100%;overflow:hidden}
 .mhero{display:none}
 @media(max-width:900px){
   .auth-r{display:block;padding:12px;margin-left:0}
-  .mhero{display:block;border-radius:20px;background:#0B2A1F url(../assets/banner.jpg) center/cover;color:#fff;padding:30px 22px;margin-bottom:14px;position:relative;overflow:hidden}
+  .mhero{display:block;border-radius:20px;background:#0B2A1F url(../assets/banner-night.jpg) center/cover;color:#fff;padding:30px 22px;margin-bottom:14px;position:relative;overflow:hidden}
   .mhero::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,20,14,.45),rgba(2,20,14,.72))}
   .mhero b,.mhero span{position:relative}
   .mhero b{display:block;font-size:24px;font-weight:800}
