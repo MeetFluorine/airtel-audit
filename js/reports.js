@@ -9,6 +9,8 @@
 const REPORTS = {
   variance: { title: 'Consolidated Variance', desc: 'Short and excess records across stores (exceptions only by default). Use the Type filter for Serialized / Non-Serialized only, and Show for short-only or excess-only — this replaces the old Serialized, Non-Serialized and Circle Shortage reports.', variance: true,
     head: ['Audit Cycle', 'Circle', 'Store', 'Item Code', 'Inventory Status', 'Item Description', 'UOM', 'Quality', 'System Serial', 'Physical Serial', 'Expected Qty', 'Physical Qty', 'Matched Qty', 'Short Qty', 'Excess Qty', 'Variance Type', 'Audit Date', 'Submitted By', 'Type', 'In Transit', 'Shortage Remark', 'Accepted Qty', 'Revised Genuine Qty'] },
+  shortage_remarks: { title: 'Shortage Remarks', desc: 'Every shortage row except in-transit, store-wise, with the full remark (category + reference + note) and its review outcome: Accepted, Partially Accepted, Not Accepted, Pending, or No Remark. The download keeps the approved mockup formatting (title, status colours, totals row).',
+    head: ['Circle', 'Store Code', 'Store Name', 'Item Code', 'Item Description', 'Type', 'System Serial', 'Short Qty', 'Remark Category', 'Reference', 'Note', 'Claimed Qty', 'Accepted Qty', 'Review Status', 'Reviewed By', 'Reviewer Role', 'Reviewed On', 'Revised Genuine Qty'], shortageRemarks: true },
   store_audit: { title: 'Store Audit Report', desc: 'One store, full reconciliation: overview + variance. Every line (matched, short, excess) split by Serialized / Non-Serialized, with an In-Transit flag', need: 'store',
     head: ['Audit Cycle', 'Circle', 'Store Code', 'Store Name', 'Item Code', 'Item Description', 'Inventory Status', 'UOM', 'Quality', 'Type', 'Serial No', 'Expected Qty', 'Physical Qty', 'Matched Qty', 'Short Qty', 'Excess Qty', 'Result', 'In Transit', 'Audit Date', 'Submitted By', 'Shortage Remark', 'Accepted Qty', 'Revised Genuine Qty', 'Row Note'] },
   pan_india: { title: 'Pan-India Audit Overview', desc: 'One row per store for the cycle: expected / physical / matched / short (in-transit, other, serialized, non-serialized splits) / excess / match rate. This replaces Store Summary (its Version and Last Updated columns are included). In-progress and not-started stores show — in the shortage splits instead of a misleading 0. The download ends with a GRAND TOTAL row; its match rate covers completed stores only.',
@@ -23,7 +25,7 @@ const REPORTS = {
 const GEN_GROUPS = [
   ['Store Reports', ['store_audit', 'store_status']],
   ['Overview Reports', ['pan_india', 'circle_summary']],
-  ['Variance Reports', ['variance']],
+  ['Variance Reports', ['variance', 'shortage_remarks']],
   ['User Reports', ['users']],
 ];
 const LOG_LBL = Object.assign({}, EVT, { LOGIN: 'Login', USER_APPROVED: 'User approved', USER_REJECTED: 'User rejected', USER_STORE_CHANGED: 'User store changed', REPORT_EXPORTED: 'Report exported',
@@ -70,6 +72,7 @@ function totalsRow(rep, rows) {
 // extra (variance only): { type: '' | 'ser' | 'non', show: '' | 'SHORT' | 'EXCESS' } — the Type filter reuses the
 // server's serial / nonserial branches, the Show filter the new p_variance_type parameter.
 async function downloadReport(rep, cycleId, circleId, storeId, inc, msgEl, extra) {
+  if (rep === 'shortage_remarks') return downloadShortageRemarks(cycleId, circleId, storeId, msgEl);
   const R = REPORTS[rep], PSZ = 2000; let off = 0, all = [], total = 0;
   const srv = rep === 'variance' && extra ? (extra.type === 'ser' ? 'serial' : extra.type === 'non' ? 'nonserial' : 'variance') : rep;
   await loadXlsx();
@@ -87,6 +90,80 @@ async function downloadReport(rep, cycleId, circleId, storeId, inc, msgEl, extra
   const d = new Date(), ymd = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'), cname = (S.cycles.find(c => c.id === cycleId) || {}).name || '';
   const suffix = rep === 'variance' && extra ? ((extra.type === 'ser' ? '_Serialized' : extra.type === 'non' ? '_Non-Serialized' : '') + (extra.show === 'SHORT' ? '_Short-only' : extra.show === 'EXCESS' ? '_Excess-only' : '')) : '';
   XLSX.writeFile(wb, `Shadowfax_Airtel_${slug(R.title)}${suffix}_${slug(cname)}_${ymd}.xlsx`); toast(`Downloaded ${fn(n)} row(s).`, 'ok');
+}
+
+// Shortage Remarks download: same paging as downloadReport, but the workbook
+// is built with ExcelJS — SheetJS cannot write cell styles — so the file
+// keeps the approved mockup formatting: title + subtitle rows, navy header,
+// status colours, totals row, frozen header, autofilter. Pure builder
+// (rows + cycle name in, Excel buffer out) so the formatting can be
+// verified outside the page.
+function buildShortageRemarksWorkbook(rows, cycleName) {
+  const HEAD = REPORTS.shortage_remarks.head;
+  const WIDTHS = [8, 17, 12, 13, 24, 15, 24, 10, 15, 24, 52, 11, 11, 18, 14, 13, 12, 13];
+  const STATUS_FILL = { 'Accepted': 'FFE2EFDA', 'Partially Accepted': 'FFDDEBF7', 'Not Accepted': 'FFFCE4E4', 'Pending': 'FFFFF2CC', 'No Remark': 'FFE7E6E6' };
+  const stores = new Set(rows.map(r => r['Store Code'])).size;
+  const cnt = s => rows.filter(r => r['Review Status'] === s).length;
+  const thin = { left: { style: 'thin', color: { argb: 'FFBFBFBF' } }, right: { style: 'thin', color: { argb: 'FFBFBFBF' } }, top: { style: 'thin', color: { argb: 'FFBFBFBF' } }, bottom: { style: 'thin', color: { argb: 'FFBFBFBF' } } };
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Shortage Remarks');
+  ws.mergeCells(1, 1, 1, HEAD.length);
+  const t = ws.getCell(1, 1); t.value = 'Shortage Remarks Report';
+  t.font = { bold: true, size: 14, color: { argb: 'FF0B2145' } };
+  ws.mergeCells(2, 1, 2, HEAD.length);
+  const sub = ws.getCell(2, 1);
+  sub.value = `Cycle: ${cycleName}  |  Stores: ${stores}  |  Rows: ${rows.length}  |  In-transit shortage rows: EXCLUDED  |  Accepted: ${cnt('Accepted')}  ·  Partially Accepted: ${cnt('Partially Accepted')}  ·  Not Accepted: ${cnt('Not Accepted')}  ·  Pending: ${cnt('Pending')}  ·  No Remark: ${cnt('No Remark')}`;
+  sub.font = { italic: true, size: 11, color: { argb: 'FF404040' } };
+  const hr = ws.getRow(3);
+  HEAD.forEach((h, i) => {
+    const c = hr.getCell(i + 1); c.value = h;
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B2145' } };
+    c.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    c.border = thin;
+  });
+  hr.height = 30;
+  rows.forEach(r => {
+    const row = ws.addRow(HEAD.map(h => r[h] == null ? null : r[h]));
+    row.eachCell((c, i) => {
+      c.border = thin;
+      c.alignment = { vertical: 'middle', wrapText: [5, 11].includes(i) };
+      if ([8, 12, 13, 18].includes(i)) c.alignment = { horizontal: 'center', vertical: 'middle' };
+      if (i === 14 && STATUS_FILL[r['Review Status']]) { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL[r['Review Status']] } }; c.font = { bold: true, size: 11 }; }
+    });
+  });
+  const first = 4, last = 3 + rows.length, tr = ws.addRow([]);
+  tr.getCell(1).value = 'TOTAL'; tr.getCell(1).font = { bold: true };
+  [[8, 'H'], [12, 'L'], [13, 'M'], [18, 'R']].forEach(([i, L]) => {
+    const c = tr.getCell(i); c.value = { formula: `SUM(${L}${first}:${L}${last})` }; c.font = { bold: true }; c.alignment = { horizontal: 'center' };
+  });
+  for (let i = 1; i <= HEAD.length; i++) tr.getCell(i).border = { top: { style: 'medium' } };
+  ws.columns = HEAD.map((h, i) => ({ width: WIDTHS[i] }));
+  ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 3 }];
+  ws.autoFilter = { from: 'A3', to: `R${last}` };
+  return wb.xlsx.writeBuffer();
+}
+
+async function downloadShortageRemarks(cycleId, circleId, storeId, msgEl) {
+  const PSZ = 2000; let off = 0, all = [], total = 0;
+  await loadExcelJS();
+  for (;;) {
+    const { data, error } = await sb.rpc('shortage_remarks_rows', { p_cycle: cycleId, p_circle: circleId || null, p_store: storeId || null, p_offset: off, p_limit: PSZ, p_export: off === 0 });
+    if (error) throw error;
+    total = data.total; all = all.concat(data.rows); if (msgEl) msgEl.textContent = `Fetching ${fn(all.length)} / ${fn(total)}…`; off += PSZ;
+    if (off >= total || !data.rows.length) break; if (all.length >= 200000) { toast('Stopped at 200,000 rows. Narrow the filters to export the rest.', 'err'); break; }
+  }
+  if (msgEl) msgEl.textContent = '';
+  if (!all.length) { toast('There is nothing to export for these filters.', 'err'); return; }
+  const n = all.length;
+  const cname = (S.cycles.find(c => c.id === cycleId) || {}).name || '';
+  const buffer = await buildShortageRemarksWorkbook(all, cname);
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  const d = new Date(), ymd = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  a.download = `Shadowfax_Airtel_Shortage_Remarks_${slug(cname)}_${ymd}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast(`Downloaded ${fn(n)} row(s).`, 'ok');
 }
 
 // Export the filtered audit log to .xlsx (pages through audit_log the way downloadReport pages through report_rows).
@@ -116,7 +193,7 @@ async function downloadLogs(F, msgEl) {
 PAGES.reports = async el => {
   if (staffOnly(el)) return; if (!S.cycleId) return noCycle(el);
   const [circles, stores] = await Promise.all([getCircles(), getStores()]);
-  const TABS = { audit: ['Audit Reports', ['store_audit']], variance: ['Variance Reports', ['variance']],
+  const TABS = { audit: ['Audit Reports', ['store_audit']], variance: ['Variance Reports', ['variance', 'shortage_remarks']],
     overview: ['Overview Reports', ['pan_india', 'store_status', 'circle_summary']], users: ['User Reports', ['users']], activity: ['Audit Logs', null] };
   const st = { tab: 'audit', rep: 'store_audit', circle: '', store: '', inc: false, vtype: '', vshow: '', page: 0 }; const PS = 50, cid = S.cycleId;
   el.innerHTML = `<div class="bar" style="margin-bottom:12px"><span></span><button class="btn yel" id="genrep">${ic('plus', 16)} Generate Report</button></div>
@@ -178,7 +255,9 @@ PAGES.reports = async el => {
       : R.need === 'circle' && !st.circle ? 'Select a circle above to preview the Circle Shortage Report.' : '';
     if (needMsg) { $('prev').innerHTML = `<div class="alert info">${needMsg}</div>`; return; }
     $('prev').innerHTML = universeLoader();
-    const { data, error } = await sb.rpc('report_rows', args(st.page * PS, PS, false)); if (error) { $('prev').innerHTML = `<div class="alert err">${esc(rpcMsg(error))}</div>`; return; }
+    const { data, error } = st.rep === 'shortage_remarks'
+      ? await sb.rpc('shortage_remarks_rows', { p_cycle: cid, p_circle: st.circle || null, p_store: st.store || null, p_offset: st.page * PS, p_limit: PS, p_export: false })
+      : await sb.rpc('report_rows', args(st.page * PS, PS, false)); if (error) { $('prev').innerHTML = `<div class="alert err">${esc(rpcMsg(error))}</div>`; return; }
     normRows(st.rep, data.rows);
     $('prev').innerHTML = `<div class="bar"><b>Preview: ${R.title}</b><span class="muted">${fn(data.total)} row(s)${R.variance ? (st.inc ? ' · full reconciliation' : ' · exceptions only') : ''}</span></div>` + tbl(R.head, data.rows.map(r => '<tr>' + R.head.map(h => `<td>${r[h] == null ? '' : esc(r[h])}</td>`).join('') + '</tr>').join(''))
       + `<div class="bar"><span class="muted">Showing ${data.rows.length ? st.page * PS + 1 : 0}–${st.page * PS + data.rows.length}</span><div class="row"><button class="btn sm" data-pg="-1" ${st.page ? '' : 'disabled'}>Previous</button><button class="btn sm" data-pg="1" ${(st.page + 1) * PS < data.total ? '' : 'disabled'}>Next</button></div></div>`;

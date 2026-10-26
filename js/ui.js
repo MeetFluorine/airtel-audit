@@ -107,6 +107,22 @@ function loadXlsx() {
   return __xlsxP;
 }
 
+/* Lazy-load ExcelJS the same way — only the Shortage Remarks download
+   needs it, because SheetJS cannot write cell styles (header fill, status
+   colours, frozen panes) and that report must match its approved mockup. */
+let __exceljsP = null;
+function loadExcelJS() {
+  if (window.ExcelJS) return Promise.resolve();
+  if (!__exceljsP) __exceljsP = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = res;
+    s.onerror = () => { __exceljsP = null; rej(new Error('Could not load the Excel library. Check your connection and try again.')); };
+    document.head.appendChild(s);
+  });
+  return __exceljsP;
+}
+
 /* Universal loading screen: the Shadowfax "orbit" animation. Replaces page
    content while data loads (sidebar + topbar stay visible). Same component on
    every page - universal wording only ("Loading..."), never page-specific. */
