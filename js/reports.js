@@ -209,6 +209,7 @@ PAGES.reports = async el => {
     const o = openModal('Generate Report', `
       <div class="fld"><label for="gr-type">Select Report Type</label><div class="inp"><select id="gr-type">${opts}</select></div></div>
       <p class="muted" id="gr-desc" style="margin:6px 0 12px"></p>
+      <div class="fld"><label for="gr-cy">Audit cycle</label><div class="inp"><select id="gr-cy">${S.cycles.map(c => `<option value="${c.id}" ${c.id === cid ? 'selected' : ''}>${esc(c.name)}${c.status === 'ACTIVE' ? '' : ' (closed)'}</option>`).join('')}</select></div></div>
       <div class="row2"><div class="fld"><label for="gr-ci">Circle</label><div class="inp"><select id="gr-ci"><option value="">All my circles</option>${circles.map(c => `<option value="${c.id}">${esc(c.code)}</option>`).join('')}</select></div></div>
       <div class="fld"><label for="gr-st">Store</label><div class="inp"><select id="gr-st"></select></div></div></div>
       <label class="chk" id="gr-incw"><input type="checkbox" id="gr-inc"> Also include matched records</label>
@@ -216,12 +217,12 @@ PAGES.reports = async el => {
       <div class="fld"><label for="gr-vshow">Show</label><div class="inp"><select id="gr-vshow"><option value="">All exceptions</option><option value="SHORT">Short only</option><option value="EXCESS">Excess only</option></select></div></div></div>
       <div class="alert err" id="gr-err" hidden></div><div id="gr-msg" class="muted"></div>`,
       [{ label: 'Cancel' }, { label: 'Generate & Download', cls: 'yel', fn: async () => {
-        const rep = o.querySelector('#gr-type').value, ci = o.querySelector('#gr-ci').value, sti = o.querySelector('#gr-st').value;
+        const rep = o.querySelector('#gr-type').value, cy = o.querySelector('#gr-cy').value || cid, ci = o.querySelector('#gr-ci').value, sti = o.querySelector('#gr-st').value;
         const need = REPORTS[rep].need, errEl = o.querySelector('#gr-err');
         const bad = m => { errEl.textContent = m; errEl.hidden = false; };
         if (need === 'store' && !sti) { bad('Please select a store for the Store Audit Report.'); return false; }
         errEl.hidden = true;
-        await downloadReport(rep, cid, ci || null, sti || null, o.querySelector('#gr-inc').checked, o.querySelector('#gr-msg'), { type: o.querySelector('#gr-vtype').value, show: o.querySelector('#gr-vshow').value });
+        await downloadReport(rep, cy, ci || null, sti || null, o.querySelector('#gr-inc').checked, o.querySelector('#gr-msg'), { type: o.querySelector('#gr-vtype').value, show: o.querySelector('#gr-vshow').value });
       } }]);
     const q = s => o.querySelector(s);
     const sync = () => {
