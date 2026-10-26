@@ -17,6 +17,10 @@
 --   (0 < accepted < claimed) · Not Accepted (reviewed, accepted 0).
 --   Revised Genuine = short − accepted (reviewed only); pending remarks
 --   change nothing, same rule as ranking.
+--   Reviewer Role casts profiles.role to text first: it is the user_role
+--   ENUM, and mixing it with text literals in a CASE makes Postgres cast
+--   the literals to the enum — fails with 22P02 on '—' (no reviewer) and
+--   on 'Admin'/'Circle Head' (not enum members).
 --   Scoping matches report_rows(): _scope() + can_manage_store(), so a
 --   Circle Head only ever receives their own circles.
 -- =====================================================================
@@ -48,7 +52,7 @@ begin
                 when rm.accepted >= least(coalesce(rm.qty, r.short_qty), r.short_qty) then 'Accepted'
                 else 'Partially Accepted' end as "Review Status",
            coalesce(rv.full_name, '—') as "Reviewed By",
-           case rv.role when 'ADMIN' then 'Admin' when 'CIRCLE_HEAD' then 'Circle Head' else coalesce(rv.role, '—') end as "Reviewer Role",
+           case rv.role::text when 'ADMIN' then 'Admin' when 'CIRCLE_HEAD' then 'Circle Head' else coalesce(rv.role::text, '—') end as "Reviewer Role",
            case when rm.reviewed_at is null then '—' else to_char(rm.reviewed_at at time zone 'Asia/Kolkata', 'YYYY-MM-DD') end as "Reviewed On",
            greatest(r.short_qty - case when rm.status = 'REVIEWED' then coalesce(rm.accepted, 0) else 0 end, 0) as "Revised Genuine Qty"
       from public.reconciliation_results r join ses on ses.id = r.session_id join public.stores st on st.id = r.store_id join public.circles c on c.id = st.circle_id
